@@ -1,0 +1,41 @@
+{
+  "name": "smartcivic",
+  "version": "1.0.0",
+  "description": "SmartCivic — Full-Stack Citizen Grievance & Municipal Resolution Platform",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node backend/server.js",
+    "seed": "node backend/utils/seedData.js",
+    "test": "node backend/tests/api.test.js"
+  },
+  "keywords": [
+    "smartcivic",
+    "bengaluru",
+    "citizen-portal",
+    "department-portal",
+    "admin-portal",
+    "issue-tracker",
+    "react",
+    "express",
+    "mongodb"
+  ],
+  "author": "Code Morphicx",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.3.1",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "serve": "^14.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

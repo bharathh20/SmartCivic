@@ -1,0 +1,196 @@
+{
+  "info": {
+    "_postman_id": "smartcivic-collection-id-2026",
+    "name": "SmartCivic REST API Collection",
+    "description": "Official Postman Collection for SmartCivic Node.js + Express + MongoDB REST API platform. Features JWT authentication, complaint reporting, AI triage, location tracking, and admin dashboard statistics.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication (User & Admin)",
+      "item": [
+        {
+          "name": "Register Citizen",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Arjun Sharma\",\n  \"email\": \"arjun.sharma@gmail.com\",\n  \"password\": \"password123\",\n  \"mobile\": \"+91 98765 43210\",\n  \"address\": \"123, 5th Cross, Indiranagar, Bengaluru 560038\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "register"]
+            }
+          }
+        },
+        {
+          "name": "User Login (Returns JWT Token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"arjun.sharma@gmail.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Logged In User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Arjun Sharma Updated\",\n  \"mobile\": \"+91 98765 99999\",\n  \"address\": \"Sector 4, Indiranagar, Bengaluru 560038\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/profile",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Civic Complaints (Citizen)",
+      "item": [
+        {
+          "name": "Submit New Complaint (Executes AI Triage)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Deep Pothole on 5th Cross Junction\",\n  \"category\": \"Roads & Potholes\",\n  \"priority\": \"High\",\n  \"description\": \"Large pothole causing vehicle tire damage and severe hazard for two-wheelers.\",\n  \"location\": \"12.9716°N, 77.5946°E — Indiranagar, Bengaluru\",\n  \"latitude\": 12.9716,\n  \"longitude\": 77.5946,\n  \"images\": [\"https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=600&q=80\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "complaints"]
+            }
+          }
+        },
+        {
+          "name": "Get All Complaints",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "complaints"]
+            }
+          }
+        },
+        {
+          "name": "Track Complaint Status (By Ticket ID)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/track/SC-2024-0041",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "complaints", "track", "SC-2024-0041"]
+            }
+          }
+        },
+        {
+          "name": "Upvote Complaint",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/complaints/SC-2024-0041/upvote",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "complaints", "SC-2024-0041", "upvote"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Admin Dashboard & Municipal Operations",
+      "item": [
+        {
+          "name": "Get Dashboard Statistics",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get All Complaints (Admin View)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/complaints",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "complaints"]
+            }
+          }
+        },
+        {
+          "name": "Update Complaint Status (Resolve / Assign Crew)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Resolved\",\n  \"assignedOfficer\": \"Rajesh Kumar\",\n  \"officerRole\": \"PWD Chief Engineer\",\n  \"remark\": \"Road asphalt resurfacing completed and inspector sign-off recorded.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/complaints/SC-2024-0041/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "complaints", "SC-2024-0041", "status"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
