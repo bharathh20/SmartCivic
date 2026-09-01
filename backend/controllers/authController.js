@@ -18,17 +18,22 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
+    const memberSinceStr = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
     const user = await User.create({
       name: fullName,
       email,
       password,
       mobile: mobile || '+91 98765 43210',
       address: address || '123, 5th Cross, Indiranagar, Bengaluru 560038',
+      avatar: req.body.avatar || '',
+      memberSince: memberSinceStr,
       role: 'citizen'
     });
 
     if (user) {
       const token = generateToken(user._id);
+      const formattedMemberSince = user.memberSince || (user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : memberSinceStr);
       res.status(201).json({
         token,
         user: {
@@ -38,10 +43,11 @@ const registerUser = async (req, res) => {
           role: user.role,
           mobile: user.mobile,
           address: user.address,
-          aadhaar: user.aadhaar,
+          avatar: user.avatar || '',
           badge: user.badge,
           zone: user.zone,
-          memberSince: user.memberSince
+          memberSince: formattedMemberSince,
+          createdAt: user.createdAt
         }
       });
     } else {
@@ -67,6 +73,7 @@ const loginUser = async (req, res) => {
 
     if (user && (await user.matchPassword(password))) {
       const token = generateToken(user._id);
+      const formattedMemberSince = user.memberSince || (user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
       res.json({
         token,
         user: {
@@ -76,10 +83,11 @@ const loginUser = async (req, res) => {
           role: user.role,
           mobile: user.mobile,
           address: user.address,
-          aadhaar: user.aadhaar,
+          avatar: user.avatar || '',
           badge: user.badge,
           zone: user.zone,
-          memberSince: user.memberSince
+          memberSince: formattedMemberSince,
+          createdAt: user.createdAt
         }
       });
     } else {
@@ -97,6 +105,7 @@ const getUserProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (user) {
+      const formattedMemberSince = user.memberSince || (user.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
       res.json({
         user: {
           _id: user._id,
@@ -105,11 +114,11 @@ const getUserProfile = async (req, res) => {
           role: user.role,
           mobile: user.mobile,
           address: user.address,
-          aadhaar: user.aadhaar,
-          unmaskedAadhaar: user.unmaskedAadhaar,
+          avatar: user.avatar || '',
           badge: user.badge,
           zone: user.zone,
-          memberSince: user.memberSince
+          memberSince: formattedMemberSince,
+          createdAt: user.createdAt
         }
       });
     } else {
@@ -131,8 +140,12 @@ const updateUserProfile = async (req, res) => {
       user.name = req.body.name || user.name;
       user.mobile = req.body.mobile || user.mobile;
       user.address = req.body.address || user.address;
+      if (req.body.avatar !== undefined) {
+        user.avatar = req.body.avatar;
+      }
 
       const updatedUser = await user.save();
+      const formattedMemberSince = updatedUser.memberSince || (updatedUser.createdAt ? new Date(updatedUser.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
 
       res.json({
         message: 'Profile updated successfully',
@@ -143,10 +156,11 @@ const updateUserProfile = async (req, res) => {
           role: updatedUser.role,
           mobile: updatedUser.mobile,
           address: updatedUser.address,
-          aadhaar: updatedUser.aadhaar,
+          avatar: updatedUser.avatar || '',
           badge: updatedUser.badge,
           zone: updatedUser.zone,
-          memberSince: updatedUser.memberSince
+          memberSince: formattedMemberSince,
+          createdAt: updatedUser.createdAt
         }
       });
     } else {

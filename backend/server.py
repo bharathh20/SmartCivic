@@ -21,11 +21,10 @@ USERS_DB = [
         "role": "citizen",
         "mobile": "+91 98765 43210",
         "address": "123, 5th Cross, Indiranagar, Bengaluru 560038",
-        "aadhaar": "XXXX-XXXX-3421",
-        "unmaskedAadhaar": "5482-9102-3421",
+        "avatar": "",
         "badge": "VERIFIED CITIZEN",
         "zone": "Bengaluru Municipal Zone C",
-        "memberSince": "January 2023"
+        "memberSince": "September 2026"
     },
     {
         "_id": "admin_001",
@@ -35,10 +34,10 @@ USERS_DB = [
         "role": "admin",
         "mobile": "+91 99000 11223",
         "address": "BBMP Zone C Headquarters, Bengaluru",
-        "aadhaar": "XXXX-XXXX-9999",
+        "avatar": "",
         "badge": "ZONAL COMMISSIONER",
         "zone": "Bengaluru Municipal Zone C",
-        "memberSince": "January 2022"
+        "memberSince": "September 2026"
     },
     {
         "_id": "officer_pwd_001",
@@ -49,10 +48,10 @@ USERS_DB = [
         "department": "PWD",
         "mobile": "+91 98450 12345",
         "address": "PWD Sub-Division Office, Indiranagar",
-        "aadhaar": "XXXX-XXXX-7712",
+        "avatar": "",
         "badge": "CHIEF DISPATCH ENGINEER",
         "zone": "Bengaluru Zone C — PWD Division",
-        "memberSince": "March 2021"
+        "memberSince": "September 2026"
     }
 ]
 
@@ -389,11 +388,10 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 "role": "citizen",
                 "mobile": payload.get('mobile', '+91 98765 43210'),
                 "address": payload.get('address', 'Indiranagar, Bengaluru'),
-                "aadhaar": "XXXX-XXXX-3421",
-                "unmaskedAadhaar": "5482-9102-3421",
+                "avatar": payload.get('avatar', ''),
                 "badge": "VERIFIED CITIZEN",
                 "zone": "Bengaluru Municipal Zone C",
-                "memberSince": "August 2026"
+                "memberSince": "September 2026"
             }
             USERS_DB.append(new_user)
             token = generate_jwt_token(new_user['_id'])
@@ -552,9 +550,12 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"message": "All notifications marked as read"}).encode())
         elif url == '/api/users/profile':
             user = get_user_from_headers(self.headers)
+            if not user:
+                user = USERS_DB[0]
             if 'name' in payload: user['name'] = payload['name']
             if 'mobile' in payload: user['mobile'] = payload['mobile']
             if 'address' in payload: user['address'] = payload['address']
+            if 'avatar' in payload: user['avatar'] = payload['avatar']
             self._set_headers(200)
             self.wfile.write(json.dumps({"message": "Profile updated successfully", "user": user}).encode())
         elif url == '/api/users/change-password':

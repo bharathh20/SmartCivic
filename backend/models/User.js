@@ -29,13 +29,9 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: 'Indiranagar, Bengaluru'
     },
-    aadhaar: {
+    avatar: {
       type: String,
-      default: 'XXXX-XXXX-3421'
-    },
-    unmaskedAadhaar: {
-      type: String,
-      default: '5482-9102-3421'
+      default: ''
     },
     role: {
       type: String,
@@ -52,7 +48,7 @@ const userSchema = new mongoose.Schema(
     },
     memberSince: {
       type: String,
-      default: 'January 2023'
+      default: () => new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     }
   },
   {

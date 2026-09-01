@@ -186,13 +186,12 @@ const INITIAL_NOTIFICATIONS = [
 ];
 
 const USER_PROFILE_INITIAL = {
-  name: 'Citizen User',
-  email: 'Not provided',
-  mobile: 'Not provided',
-  aadhaar: 'XXXX-XXXX-3421',
-  unmaskedAadhaar: '5482-9102-3421',
-  address: 'Indiranagar, Bengaluru',
-  memberSince: `January ${new Date().getFullYear()}`,
+  name: 'Arjun Sharma',
+  email: 'arjun.sharma@gmail.com',
+  mobile: '+91 98765 43210',
+  address: '123, 5th Cross, Indiranagar, Bengaluru 560038',
+  avatar: '',
+  memberSince: `${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
   role: 'citizen',
   badge: 'VERIFIED CITIZEN',
   zone: 'Bengaluru Municipal Zone C'
@@ -558,6 +557,72 @@ function App() {
     triggerToast(`Status for ${ticketId} updated to ${status}. Notification dispatched to citizen!`);
   };
 
+  // Profile Photo Upload Handler
+  const handleAvatarUpload = async (file) => {
+    if (!file) return;
+
+    // Sensible file format & size validation (< 5MB)
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type)) {
+      triggerToast('Please select a valid image file (PNG, JPG, JPEG, WEBP).', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast('Image size exceeds 5MB limit. Please select a smaller photo.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target.result;
+      let finalAvatar = base64Data;
+
+      // Try uploading to server API endpoint
+      try {
+        const fd = new FormData();
+        fd.append('image', file);
+        fd.append('avatar', file);
+        const uploadRes = await fetch(`${API_BASE_URL}/upload`, {
+          method: 'POST',
+          headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+          body: fd
+        });
+        if (uploadRes.ok) {
+          const uploadJson = await uploadRes.json();
+          if (uploadJson.imageUrl) {
+            finalAvatar = uploadJson.imageUrl;
+          }
+        }
+      } catch (err) {
+        console.log('[Upload API Warning, using base64]', err);
+      }
+
+      // Update State & LocalStorage
+      const updatedUser = { ...currentUser, avatar: finalAvatar };
+      setCurrentUser(updatedUser);
+      localStorage.setItem('smartcivic_user', JSON.stringify(updatedUser));
+
+      // Persist to user profile in MongoDB backend
+      if (authToken) {
+        try {
+          await fetch(`${API_BASE_URL}/users/profile`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ avatar: finalAvatar })
+          });
+        } catch (err) {
+          console.log('[Persist Avatar Error]', err);
+        }
+      }
+
+      triggerToast('Profile photo updated successfully!');
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Render view based on state
   const selectedComplaint = complaints.find(c => c.id === selectedTicketId) || complaints[0];
 
@@ -637,8 +702,16 @@ function App() {
                   onClick={() => setActiveView('profile')} 
                   className="flex items-center gap-2.5 cursor-pointer bg-slate-900 border border-slate-800 hover:border-cyan-500/50 px-3 py-1.5 rounded-full transition"
                 >
-                  <div className="w-7 h-7 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center">
-                    {currentUser.name ? currentUser.name.charAt(0) : 'C'}
+                  <div className="w-7 h-7 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center overflow-hidden border border-cyan-400">
+                    {currentUser.avatar ? (
+                      <img 
+                        src={currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('data:') ? currentUser.avatar : (API_BASE_URL.replace('/api', '') + currentUser.avatar)} 
+                        alt={currentUser.name} 
+                        className="w-full h-full object-cover" 
+                      />
+                    ) : (
+                      currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'C'
+                    )}
                   </div>
                   <span className="text-xs font-semibold text-slate-200">{currentUser.name || 'Citizen User'}</span>
                 </div>
@@ -744,10 +817,14 @@ function App() {
               {activeView === 'profile' && (
                 <ProfileView 
                   user={currentUser}
+                  onAvatarUpload={handleAvatarUpload}
                   onEditProfile={() => setIsEditProfileOpen(true)}
                   onChangePassword={() => setIsChangePasswordOpen(true)}
                   onLogout={() => {
                     setIsLoggedIn(false);
+                    setAuthToken(null);
+                    localStorage.removeItem('smartcivic_jwt_token');
+                    localStorage.removeItem('smartcivic_user');
                     setActiveView('landing');
                     triggerToast('Logged out successfully.');
                   }}
@@ -925,7 +1002,8 @@ function App() {
                   body: JSON.stringify({
                     name: updatedFields.name,
                     mobile: updatedFields.mobile,
-                    address: updatedFields.address
+                    address: updatedFields.address,
+                    avatar: updatedFields.avatar
                   })
                 });
                 if (res.ok) {
@@ -2732,8 +2810,31 @@ function NotificationsView({ notifications, onNotificationClick, onMarkAllRead }
 // 10. MY PROFILE PAGE (Slide 12)
 // ==========================================
 
-function ProfileView({ user, onEditProfile, onChangePassword, onLogout }) {
-  const [showAadhaar, setShowAadhaar] = useState(false);
+function ProfileView({ user, onAvatarUpload, onEditProfile, onChangePassword, onLogout }) {
+  const fileInputRef = React.useRef(null);
+
+  const formatMemberSince = (u) => {
+    if (!u) return 'September 2026';
+    if (u.createdAt) {
+      try {
+        const d = new Date(u.createdAt);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+      } catch (e) {}
+    }
+    if (u.memberSince && !u.memberSince.includes('January 2023') && !u.memberSince.includes('January 2022')) {
+      return u.memberSince;
+    }
+    return 'September 2026';
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onAvatarUpload(file);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8 max-w-4xl mx-auto">
@@ -2746,18 +2847,60 @@ function ProfileView({ user, onEditProfile, onChangePassword, onLogout }) {
       {/* Main Profile Card (Matches Slide 12) */}
       <div className="glass-card rounded-3xl p-8 flex flex-col gap-8 border border-slate-800">
         
-        {/* Header User Badge */}
-        <div className="flex items-center gap-6 pb-6 border-b border-slate-800">
-          <div className="w-20 h-20 rounded-full bg-cyan-500 text-slate-950 font-black text-3xl flex items-center justify-center glow-cyan shadow-xl">
-            {user.name.charAt(0)}
+        {/* Header User Badge & Profile Photo Upload */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-800">
+          <div className="flex items-center gap-6">
+            {/* Avatar with Camera Overlay */}
+            <div className="relative group">
+              <div 
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 to-sky-400 text-slate-950 font-black text-3xl flex items-center justify-center glow-cyan shadow-xl overflow-hidden cursor-pointer border-2 border-cyan-400 transition hover:scale-105"
+                title="Click to upload profile photo"
+              >
+                {user.avatar ? (
+                  <img 
+                    src={user.avatar.startsWith('http') || user.avatar.startsWith('data:') ? user.avatar : (API_BASE_URL.replace('/api', '') + user.avatar)} 
+                    alt={user.name} 
+                    className="w-full h-full object-cover" 
+                  />
+                ) : (
+                  user.name ? user.name.charAt(0).toUpperCase() : 'C'
+                )}
+              </div>
+              <button 
+                type="button"
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                className="absolute -bottom-1 -right-1 bg-slate-900 border border-cyan-400 text-cyan-400 hover:bg-cyan-500 hover:text-slate-950 w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition duration-200"
+                title="Upload Profile Photo"
+              >
+                📷
+              </button>
+            </div>
+            
+            <div className="flex flex-col gap-1">
+              <h2 className="text-2xl font-black font-heading text-white">{user.name}</h2>
+              <span className="text-xs text-slate-400">{user.email}</span>
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-md w-fit mt-1">
+                {user.badge || 'VERIFIED CITIZEN'}
+              </span>
+            </div>
           </div>
-          
-          <div className="flex flex-col gap-1">
-            <h2 className="text-2xl font-black font-heading text-white">{user.name}</h2>
-            <span className="text-xs text-slate-400">{user.email}</span>
-            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-md w-fit mt-1">
-              {user.badge}
-            </span>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              className="bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-2"
+            >
+              <span>📷</span> Upload Photo
+            </button>
+            <input 
+              ref={fileInputRef}
+              type="file" 
+              accept="image/png, image/jpeg, image/jpg, image/webp" 
+              className="hidden" 
+              onChange={handleFileChange}
+            />
           </div>
         </div>
 
@@ -2780,18 +2923,8 @@ function ProfileView({ user, onEditProfile, onChangePassword, onLogout }) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">AADHAAR (MASKED)</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono font-bold text-white">
-                {showAadhaar ? user.unmaskedAadhaar : user.aadhaar}
-              </span>
-              <button 
-                onClick={() => setShowAadhaar(!showAadhaar)}
-                className="text-cyan-400 hover:text-cyan-300 text-xs font-semibold"
-              >
-                {showAadhaar ? 'Hide' : 'Show'}
-              </button>
-            </div>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">MUNICIPAL ZONE</span>
+            <span className="text-sm font-bold text-white">{user.zone || 'Bengaluru Municipal Zone C'}</span>
           </div>
 
           <div className="flex flex-col gap-1 col-span-2">
@@ -2801,7 +2934,7 @@ function ProfileView({ user, onEditProfile, onChangePassword, onLogout }) {
 
           <div className="flex flex-col gap-1 col-span-2">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">MEMBER SINCE</span>
-            <span className="text-sm font-bold text-white">{user.memberSince}</span>
+            <span className="text-sm font-bold text-cyan-400 font-mono">{formatMemberSince(user)}</span>
           </div>
 
         </div>
@@ -3157,11 +3290,70 @@ function ContactView({ triggerToast }) {
 
 function EditProfileModal({ user, onClose, onSave }) {
   const [formData, setFormData] = useState({ ...user });
+  const modalFileInputRef = React.useRef(null);
+
+  const handleModalPhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
+      alert('Please select a valid image file (PNG, JPG, JPEG, WEBP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size exceeds 5MB limit.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setFormData(prev => ({ ...prev, avatar: evt.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="glass-card w-full max-w-lg rounded-3xl p-8 flex flex-col gap-6 border border-slate-800">
-        <h3 className="text-xl font-bold text-white font-heading">Edit Profile</h3>
+      <div className="glass-card w-full max-w-lg rounded-3xl p-8 flex flex-col gap-6 border border-slate-800 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <h3 className="text-xl font-bold text-white font-heading">Edit Profile</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white font-bold text-sm">✕</button>
+        </div>
+
+        {/* Avatar Changer */}
+        <div className="flex items-center gap-4">
+          <div 
+            onClick={() => modalFileInputRef.current && modalFileInputRef.current.click()}
+            className="w-16 h-16 rounded-full bg-cyan-500 text-slate-950 font-bold text-xl flex items-center justify-center overflow-hidden border-2 border-cyan-400 cursor-pointer shadow-lg hover:scale-105 transition"
+            title="Click to change photo"
+          >
+            {formData.avatar ? (
+              <img 
+                src={formData.avatar.startsWith('http') || formData.avatar.startsWith('data:') ? formData.avatar : (API_BASE_URL.replace('/api', '') + formData.avatar)} 
+                alt="Avatar Preview" 
+                className="w-full h-full object-cover" 
+              />
+            ) : (
+              formData.name ? formData.name.charAt(0).toUpperCase() : 'C'
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <button 
+              type="button"
+              onClick={() => modalFileInputRef.current && modalFileInputRef.current.click()}
+              className="bg-slate-900 border border-slate-700 hover:border-cyan-400 text-xs font-semibold px-3 py-1.5 rounded-lg text-slate-200 hover:text-white transition w-fit"
+            >
+              Change Photo
+            </button>
+            <span className="text-[10px] text-slate-500">Max 5MB (PNG, JPG, WEBP)</span>
+            <input 
+              ref={modalFileInputRef}
+              type="file" 
+              accept="image/png, image/jpeg, image/jpg, image/webp" 
+              className="hidden" 
+              onChange={handleModalPhotoChange}
+            />
+          </div>
+        </div>
+
         <div className="flex flex-col gap-4 text-xs">
           <div className="flex flex-col gap-1">
             <label className="text-slate-400 font-bold">FULL NAME</label>
@@ -3169,7 +3361,7 @@ function EditProfileModal({ user, onClose, onSave }) {
               type="text" 
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -3178,7 +3370,7 @@ function EditProfileModal({ user, onClose, onSave }) {
               type="text" 
               value={formData.mobile}
               onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -3187,7 +3379,7 @@ function EditProfileModal({ user, onClose, onSave }) {
               type="text" 
               value={formData.address}
               onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+              className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500"
             />
           </div>
         </div>
