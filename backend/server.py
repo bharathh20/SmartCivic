@@ -122,6 +122,38 @@ COMPLAINTS_DB = [
             { "status": "Resolved", "time": "Jul 19, 2026 11:45", "note": "LED fixture replaced and tested working", "done": True }
         ],
         "reportedBy": "Arjun Sharma"
+    },
+    {
+        "_id": "60d5ecb8b3b7c82b8c8b4569",
+        "ticketId": "SC-2026-0031",
+        "title": "Garbage overflow near Park",
+        "category": "Waste & Sanitation",
+        "priority": "High",
+        "department": "BBMP Sanitation",
+        "status": "Verified",
+        "date": "Jul 15, 2026",
+        "time": "11:20 AM",
+        "estResolution": "Jul 17, 2026",
+        "assignedOfficer": "Anand Kumar",
+        "officerRole": "Sanitation Inspector Zone 3",
+        "location": "12.9650°N, 77.5900°E — Cubbon Park area",
+        "address": "Near West Gate Cubbon Park, Bengaluru",
+        "latitude": 12.9650,
+        "longitude": 77.5900,
+        "description": "Public waste bins overflowing on main walkway. Garbage spilling onto pavement.",
+        "upvotes": 22,
+        "upvotedBy": [],
+        "images": [
+            "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=600&q=80"
+        ],
+        "timeline": [
+            { "status": "Submitted", "time": "Jul 15, 2026 11:20", "note": "Ticket registered by citizen", "done": True },
+            { "status": "Verified", "time": "Jul 15, 2026 14:00", "note": "Inspector verified waste overflow", "done": True },
+            { "status": "Assigned", "time": "Pending", "note": "En route for truck dispatch", "done": False },
+            { "status": "In Progress", "time": "Pending", "note": "Pending garbage sweep", "done": False },
+            { "status": "Resolved", "time": "Pending", "note": "Pending cleanup sign-off", "done": False }
+        ],
+        "reportedBy": "Arjun Sharma"
     }
 ]
 
@@ -248,8 +280,8 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({"message": "Forbidden: Not authorized as an admin or department officer"}).encode())
                 return
             total = len(COMPLAINTS_DB)
-            pending = len([c for c in COMPLAINTS_DB if c['status'] == 'Pending'])
-            in_prog = len([c for c in COMPLAINTS_DB if c['status'] == 'In Progress'])
+            pending = len([c for c in COMPLAINTS_DB if c['status'] in ['Pending', 'Submitted', 'Verified']])
+            in_prog = len([c for c in COMPLAINTS_DB if c['status'] in ['In Progress', 'Assigned']])
             resolved = len([c for c in COMPLAINTS_DB if c['status'] == 'Resolved'])
             self._set_headers(200)
             self.wfile.write(json.dumps({
@@ -458,17 +490,42 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             if complaint:
                 new_status = payload.get('status', complaint['status'])
                 remark = payload.get('remark', f'Status updated to {new_status} by municipal official.')
-                complaint['status'] = new_status
-                if 'assignedOfficer' in payload:
+                
+                status_flow = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved']
+                norm_status = next((s for s in status_flow if s.lower() == new_status.lower().replace('_', ' ')), new_status)
+                complaint['status'] = norm_status
+                if 'assignedOfficer' in payload and payload['assignedOfficer']:
                     complaint['assignedOfficer'] = payload['assignedOfficer']
 
-                # Update timeline
-                now_str = time.ctime()
-                for item in complaint['timeline']:
-                    if item['status'].lower() == new_status.lower():
-                        item['done'] = True
-                        item['time'] = now_str
-                        item['note'] = remark
+                # Update timeline stages strictly based on status index
+                now_str = time.strftime('%b %d, %Y %I:%M %p')
+                target_idx = status_flow.index(norm_status) if norm_status in status_flow else 0
+                
+                new_timeline = []
+                for s_idx, st in enumerate(status_flow):
+                    existing = next((it for it in complaint.get('timeline', []) if it.get('status', '').lower() == st.lower()), {})
+                    if s_idx < target_idx:
+                        new_timeline.append({
+                            "status": st,
+                            "time": existing.get("time") if existing.get("time") and existing.get("time") != "Pending" else now_str,
+                            "note": existing.get("note") if existing.get("note") else f"{st} completed",
+                            "done": True
+                        })
+                    elif s_idx == target_idx:
+                        new_timeline.append({
+                            "status": st,
+                            "time": now_str,
+                            "note": remark if remark else (existing.get("note") if existing.get("note") and existing.get("note") != "Pending" else f"Status updated to {st}"),
+                            "done": True
+                        })
+                    else:
+                        new_timeline.append({
+                            "status": st,
+                            "time": "Pending",
+                            "note": existing.get("note") if existing.get("note") and existing.get("note").startswith("Pending") else f"Awaiting {st.lower()} stage",
+                            "done": False
+                        })
+                complaint['timeline'] = new_timeline
 
                 # Append Notification for Citizen Message Receiving
                 notif_item = {

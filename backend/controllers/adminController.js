@@ -8,8 +8,8 @@ const User = require('../models/User');
 const getDashboardStats = async (req, res) => {
   try {
     const total = await Complaint.countDocuments();
-    const pending = await Complaint.countDocuments({ status: 'Pending' });
-    const inProgress = await Complaint.countDocuments({ status: 'In Progress' });
+    const pending = await Complaint.countDocuments({ status: { $in: ['Pending', 'Submitted', 'Verified'] } });
+    const inProgress = await Complaint.countDocuments({ status: { $in: ['In Progress', 'Assigned'] } });
     const resolved = await Complaint.countDocuments({ status: 'Resolved' });
     const assigned = await Complaint.countDocuments({ status: 'Assigned' });
 
@@ -84,19 +84,36 @@ const updateComplaintStatus = async (req, res) => {
     if (department) complaint.department = department;
 
     const nowStr = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+    const STATUS_ORDER = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
+    const targetIdx = STATUS_ORDER.findIndex(s => s.toLowerCase() === (status || complaint.status).toLowerCase());
 
-    // Update timeline stages
-    complaint.timeline = complaint.timeline.map(item => {
-      if (item.status === status) {
-        return {
-          ...item,
-          time: nowStr,
-          note: remark || `Status updated to ${status} by ${req.user ? req.user.name : 'Municipal Officer'}.`,
-          done: true
-        };
-      }
-      return item;
-    });
+    if (targetIdx !== -1) {
+      complaint.timeline = STATUS_ORDER.map((st, idx) => {
+        const existing = (complaint.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
+        if (idx < targetIdx) {
+          return {
+            status: st,
+            time: existing.time && existing.time !== 'Pending' ? existing.time : nowStr,
+            note: existing.note || `${st} completed`,
+            done: true
+          };
+        } else if (idx === targetIdx) {
+          return {
+            status: st,
+            time: nowStr,
+            note: remark || (existing.note && existing.note !== 'Pending' ? existing.note : `Status updated to ${status} by ${req.user ? req.user.name : 'Municipal Officer'}.`),
+            done: true
+          };
+        } else {
+          return {
+            status: st,
+            time: 'Pending',
+            note: existing.note && existing.note.startsWith('Pending') ? existing.note : `Awaiting ${st.toLowerCase()} stage`,
+            done: false
+          };
+        }
+      });
+    }
 
     await complaint.save();
 

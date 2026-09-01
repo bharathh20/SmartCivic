@@ -29,3 +29,11 @@ backend/uploads/*
 # IDE / Editor Files
 .vscode/
 .idea/
+
+# Python Cache
+__pycache__/
+*.pyc
+**/*.pyc
+
+# Local locked files
+SmartCivic_Project_Documentation.docx

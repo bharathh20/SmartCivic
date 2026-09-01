@@ -66,7 +66,7 @@ const INITIAL_COMPLAINTS = [
     category: 'Waste & Sanitation',
     priority: 'High',
     department: 'BBMP Sanitation',
-    status: 'Pending',
+    status: 'Verified',
     date: 'Jul 15, 2026',
     time: '11:20 AM',
     estResolution: 'Jul 17, 2026',
@@ -489,18 +489,40 @@ function App() {
 
   // Status Update Handler (Admin / Dept Officer)
   const handleUpdateStatus = async (ticketId, status, officer, remark) => {
+    const STATUS_FLOW = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
+    const targetIdx = STATUS_FLOW.findIndex(s => s.toLowerCase() === status.toLowerCase());
+
     // Local State Update
     setComplaints(prev => prev.map(c => {
       if (c.id === ticketId) {
         return {
           ...c,
           status,
-          assignedOfficer: officer,
-          timeline: c.timeline.map(t => {
-            if (t.status.toLowerCase() === status.toLowerCase()) {
-              return { ...t, done: true, time: 'Just now', note: remark };
+          assignedOfficer: officer || c.assignedOfficer,
+          timeline: STATUS_FLOW.map((st, idx) => {
+            const existing = (c.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
+            if (idx < targetIdx) {
+              return {
+                status: st,
+                time: existing.time && existing.time !== 'Pending' ? existing.time : 'Completed',
+                note: existing.note || `${st} stage completed`,
+                done: true
+              };
+            } else if (idx === targetIdx) {
+              return {
+                status: st,
+                time: 'Just now',
+                note: remark || (existing.note && existing.note !== 'Pending' ? existing.note : `Status updated to ${status}`),
+                done: true
+              };
+            } else {
+              return {
+                status: st,
+                time: 'Pending',
+                note: existing.note && existing.note.startsWith('Pending') ? existing.note : `Awaiting ${st.toLowerCase()} stage`,
+                done: false
+              };
             }
-            return t;
           })
         };
       }
@@ -1810,8 +1832,8 @@ function RegisterView({ onRegisterSuccess, onSwitchLogin }) {
 function DashboardView({ complaints, notifications, currentUser, onSelectTicket, onReportIssue, onTrackClick, onNotificationsClick }) {
   // Compute stats
   const total = complaints.length;
-  const pending = complaints.filter(c => c.status === 'Pending').length;
-  const inProgress = complaints.filter(c => c.status === 'In Progress').length;
+  const pending = complaints.filter(c => c.status === 'Pending' || c.status === 'Submitted' || c.status === 'Verified').length;
+  const inProgress = complaints.filter(c => c.status === 'In Progress' || c.status === 'Assigned').length;
   const resolved = complaints.filter(c => c.status === 'Resolved').length;
 
   return (
@@ -1895,7 +1917,8 @@ function DashboardView({ complaints, notifications, currentUser, onSelectTicket,
                       <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                         c.status === 'In Progress' ? 'badge-in-progress' :
                         c.status === 'Resolved' ? 'badge-resolved' :
-                        c.status === 'Assigned' ? 'badge-assigned' : 'badge-pending'
+                        c.status === 'Assigned' ? 'badge-assigned' :
+                        c.status === 'Verified' ? 'badge-verified' : 'badge-pending'
                       }`}>
                         {c.status}
                       </span>
@@ -2337,7 +2360,8 @@ function MyComplaintsView({ complaints, onSelectTicket, onUpvote, onNewReport })
                 <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                   c.status === 'In Progress' ? 'badge-in-progress' :
                   c.status === 'Resolved' ? 'badge-resolved' :
-                  c.status === 'Assigned' ? 'badge-assigned' : 'badge-pending'
+                  c.status === 'Assigned' ? 'badge-assigned' :
+                  c.status === 'Verified' ? 'badge-verified' : 'badge-pending'
                 }`}>
                   {c.status}
                 </span>
@@ -2455,28 +2479,52 @@ function ComplaintDetailView({ complaint, onBack, onOpenImage }) {
 
         {/* Right 1 Col: Action Timeline */}
         <div className="glass-card rounded-3xl p-6 md:p-8 flex flex-col gap-6">
-          <h3 className="text-base font-bold text-white font-heading">Action Timeline</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-white font-heading">Action Timeline</h3>
+            <span className="text-xs font-mono font-bold text-cyan-400">
+              {((Math.max(0, ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'].findIndex(s => s.toLowerCase() === (complaint.status || 'Submitted').toLowerCase())) + 1) * 20)}% Complete
+            </span>
+          </div>
+
+          {/* Progress Bar inside Detail View */}
+          <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800 -mt-2">
+            <div 
+              className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full glow-cyan transition-all duration-500"
+              style={{ width: `${((Math.max(0, ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'].findIndex(s => s.toLowerCase() === (complaint.status || 'Submitted').toLowerCase())) + 1) * 20)}%` }}
+            ></div>
+          </div>
 
           <div className="flex flex-col gap-6 relative">
             <div className="absolute top-2 bottom-2 left-3.5 w-0.5 bg-slate-800"></div>
 
-            {complaint.timeline.map((item, idx) => (
-              <div key={idx} className="flex items-start gap-4 relative z-10">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                  item.done ? 'bg-cyan-500 text-slate-950 glow-cyan' : 'bg-slate-900 border border-slate-700 text-slate-500'
-                }`}>
-                  {item.done ? '✓' : idx + 1}
-                </div>
+            {['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'].map((st, idx) => {
+              const currentStatusNorm = (complaint.status || 'Submitted').trim();
+              const activeIndex = Math.max(0, ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'].findIndex(s => s.toLowerCase() === currentStatusNorm.toLowerCase()));
+              const isDone = idx <= activeIndex;
+              const existingItem = (complaint.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
+              const stepTime = isDone 
+                ? (existingItem.time && existingItem.time !== 'Pending' ? existingItem.time : 'Completed') 
+                : 'Pending';
+              const stepNote = existingItem.note || (isDone ? `${st} stage completed` : `Awaiting ${st.toLowerCase()} stage`);
 
-                <div className="flex flex-col gap-1">
-                  <span className={`text-sm font-bold ${item.done ? 'text-white' : 'text-slate-500'}`}>
-                    {item.status}
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">{item.time}</span>
-                  <p className="text-xs text-slate-400 leading-normal">{item.note}</p>
+              return (
+                <div key={st} className="flex items-start gap-4 relative z-10">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                    isDone ? 'bg-cyan-500 text-slate-950 glow-cyan' : 'bg-slate-900 border border-slate-700 text-slate-500'
+                  }`}>
+                    {isDone ? '✓' : idx + 1}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <span className={`text-sm font-bold transition-colors duration-300 ${isDone ? 'text-white' : 'text-slate-500'}`}>
+                      {st}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">{stepTime}</span>
+                    <p className="text-xs text-slate-400 leading-normal">{stepNote}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -2545,43 +2593,66 @@ function TrackComplaintView({ complaints, initialSearchId, onSelectTicket }) {
                 Reported {activeResult.date} · {activeResult.category} · {activeResult.department}
               </span>
             </div>
-            <span className="badge-in-progress px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider">
+            <span className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider ${
+              activeResult.status === 'Resolved' ? 'badge-resolved' :
+              activeResult.status === 'In Progress' ? 'badge-in-progress' :
+              activeResult.status === 'Assigned' ? 'badge-assigned' :
+              activeResult.status === 'Verified' ? 'badge-verified' : 'badge-pending'
+            }`}>
               {activeResult.status}
             </span>
           </div>
 
           {/* Stepper Horizontal Progress Bar */}
-          <div className="flex items-center justify-between relative max-w-2xl mx-auto w-full py-4">
-            <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-800 -translate-y-1/2 z-0"></div>
-            <div className="absolute top-1/2 left-0 h-0.5 bg-cyan-400 -translate-y-1/2 z-0 w-3/4"></div>
+          {(() => {
+            const STATUS_FLOW = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
+            const currentStatusNorm = (activeResult.status || 'Submitted').trim();
+            const statusIndex = STATUS_FLOW.findIndex(s => s.toLowerCase() === currentStatusNorm.toLowerCase());
+            const activeIndex = statusIndex !== -1 ? statusIndex : 0;
+            const progressPercentage = (activeIndex + 1) * 20;
 
-            {['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'].map((st, idx) => {
-              const isDone = idx < 4; // Mock 75% progress
-              return (
-                <div key={st} className="relative z-10 flex flex-col items-center gap-2">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    isDone ? 'bg-cyan-500 text-slate-950 glow-cyan' : 'bg-slate-900 border border-slate-700 text-slate-500'
-                  }`}>
-                    {isDone ? '✓' : idx + 1}
-                  </div>
-                  <span className={`text-[11px] font-semibold ${isDone ? 'text-cyan-400' : 'text-slate-500'}`}>
-                    {st}
-                  </span>
+            return (
+              <>
+                <div className="flex items-center justify-between relative max-w-2xl mx-auto w-full py-4">
+                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-slate-800 -translate-y-1/2 z-0"></div>
+                  <div 
+                    className="absolute top-1/2 left-0 h-0.5 bg-cyan-400 -translate-y-1/2 z-0 transition-all duration-500"
+                    style={{ width: `${(activeIndex / (STATUS_FLOW.length - 1)) * 100}%` }}
+                  ></div>
+
+                  {STATUS_FLOW.map((st, idx) => {
+                    const isDone = idx <= activeIndex;
+                    return (
+                      <div key={st} className="relative z-10 flex flex-col items-center gap-2">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
+                          isDone ? 'bg-cyan-500 text-slate-950 glow-cyan' : 'bg-slate-900 border border-slate-700 text-slate-500'
+                        }`}>
+                          {isDone ? '✓' : idx + 1}
+                        </div>
+                        <span className={`text-[11px] font-semibold transition-colors duration-300 ${isDone ? 'text-cyan-400 font-bold' : 'text-slate-500'}`}>
+                          {st}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Overall Progress Bar */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-slate-400">Overall Progress</span>
-              <span className="text-cyan-400 font-mono">75%</span>
-            </div>
-            <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800">
-              <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full w-[75%] glow-cyan"></div>
-            </div>
-          </div>
+                {/* Overall Progress Bar */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-400">Overall Progress</span>
+                    <span className="text-cyan-400 font-mono">{progressPercentage}%</span>
+                  </div>
+                  <div className="h-3 w-full bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                    <div 
+                      className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-full glow-cyan transition-all duration-500"
+                      style={{ width: `${progressPercentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* 2 Bottom Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -2894,7 +2965,9 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                 <td className="py-4 px-3">
                   <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
                     c.status === 'Resolved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
-                    c.status === 'In Progress' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' : 'bg-slate-800 text-slate-300'
+                    c.status === 'In Progress' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
+                    c.status === 'Assigned' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' :
+                    c.status === 'Verified' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-slate-800 text-slate-300'
                   }`}>
                     {c.status}
                   </span>
@@ -2905,7 +2978,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                     onClick={() => {
                       setSelectedComp(c);
                       setStatusVal(c.status);
-                      setOfficerVal(c.assignedOfficer || 'Engineer Rajesh Kumar');
+                      setOfficerVal(c.assignedOfficer || (currentUser.name || 'Engineer Rajesh Kumar'));
                     }}
                     className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold px-3 py-1.5 rounded-lg transition"
                   >
@@ -2938,11 +3011,11 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                   onChange={(e) => setStatusVal(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-purple-500"
                 >
+                  <option value="Submitted">Submitted (Initial Receipt)</option>
                   <option value="Verified">Verified (Inspector Confirmed)</option>
                   <option value="Assigned">Assigned (Crew En Route)</option>
                   <option value="In Progress">In Progress (Work Crew Onsite)</option>
                   <option value="Resolved">Resolved (Signed Off & Completed)</option>
-                  <option value="Rejected">Rejected (Out of Municipal Scope)</option>
                 </select>
               </div>
 

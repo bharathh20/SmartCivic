@@ -78,7 +78,7 @@ const INITIAL_COMPLAINTS_SEED = [
     category: 'Waste & Sanitation',
     priority: 'High',
     department: 'BBMP Sanitation',
-    status: 'Pending',
+    status: 'Verified',
     date: 'Jul 15, 2026',
     time: '11:20 AM',
     estResolution: 'Jul 17, 2026',
