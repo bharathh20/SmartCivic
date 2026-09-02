@@ -2029,7 +2029,7 @@ function DashboardView({ complaints, notifications, currentUser, onSelectTicket,
       <div className="flex flex-col gap-1">
         <div className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">CITIZEN PORTAL</div>
         <h1 className="text-3xl font-black font-heading text-white flex items-center gap-2">
-          <span>Good morning, {currentUser && currentUser.name ? currentUser.name.split(' ')[0] : 'Citizen'}</span>
+          <span>Hello, {currentUser && currentUser.name ? currentUser.name.split(' ')[0] : 'Citizen'}</span>
           <span>🖐</span>
         </h1>
         <p className="text-slate-400 text-xs">{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} - Bengaluru Municipal Zone C</p>
@@ -3144,7 +3144,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
             }`}>
               {currentUser.role === 'admin' ? 'MUNICIPAL CENTRAL COMMAND' : `DEPARTMENT PORTAL — ${userDept} OPERATIONS`}
             </div>
-            <h1 className="text-2xl font-black font-heading text-white">{currentUser.name || (currentUser.role === 'admin' ? 'Municipal Control Hub' : 'Department Officer')}</h1>
+            <h1 className="text-2xl font-black font-heading text-white">Hello, {currentUser.name || (currentUser.role === 'admin' ? 'Municipal Administrator' : 'Department Officer')}</h1>
             <p className="text-xs text-slate-400">
               {currentUser.role === 'admin' 
                 ? 'Manage zonal complaints, oversee municipal departments, & verify SLA resolution rates'
