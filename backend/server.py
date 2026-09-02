@@ -418,20 +418,31 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             comp_images = payload.get('images', [])
             if uploaded_image_url:
                 comp_images = [uploaded_image_url]
+            dept_map = {
+                'Roads & Potholes': {'department': 'PWD', 'officer': 'Rajesh Kumar', 'role': 'PWD Chief Engineer'},
+                'Power & Streetlights': {'department': 'BESCOM', 'officer': 'Suresh Gowda', 'role': 'BESCOM Electrical Linesman'},
+                'Waste & Sanitation': {'department': 'BBMP Sanitation', 'officer': 'Anand Kumar', 'role': 'Sanitation Inspector Zone 3'},
+                'Water & Sewage': {'department': 'BWSSB', 'officer': 'Venkatesh R', 'role': 'BWSSB Hydro Engineer'},
+                'Traffic & Safety': {'department': 'Traffic Police', 'officer': 'Inspector Ramesh', 'role': 'Traffic Division Sub-Inspector'},
+                'Parks & Vegetation': {'department': 'BBMP Parks & Horticulture', 'officer': 'Sunil Rao', 'role': 'Horticulture Supervisor'},
+                'Public Safety': {'department': 'City Patrol Command', 'officer': 'Duty Officer Vikram', 'role': 'Command Control Inspector'}
+            }
+            comp_cat = payload.get('category', 'Roads & Potholes')
+            dept_info = dept_map.get(comp_cat, {'department': 'PWD', 'officer': 'Rajesh Kumar', 'role': 'PWD Engineer'})
 
             new_comp = {
                 "_id": f"comp_{int(time.time())}",
                 "ticketId": ticket_id,
                 "title": payload.get('title'),
-                "category": payload.get('category', 'Roads & Potholes'),
+                "category": comp_cat,
                 "priority": payload.get('priority', 'Medium'),
-                "department": "PWD",
+                "department": payload.get('department') or dept_info['department'],
                 "status": "Submitted",
-                "date": "Aug 26, 2026",
+                "date": time.strftime('%b %d, %Y'),
                 "time": "Just now",
-                "estResolution": "Aug 29, 2026",
-                "assignedOfficer": "Rajesh Kumar",
-                "officerRole": "PWD Engineer",
+                "estResolution": payload.get('estResolution', '3 Days'),
+                "assignedOfficer": payload.get('assignedOfficer') or dept_info['officer'],
+                "officerRole": payload.get('officerRole') or dept_info['role'],
                 "location": payload.get('location', 'Indiranagar, Bengaluru'),
                 "address": payload.get('location', 'Indiranagar, Bengaluru'),
                 "description": payload.get('description'),
@@ -442,7 +453,7 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 "reportedBy": user['name'] if user else 'Guest User',
                 "isGuest": True if not user else False,
                 "timeline": [
-                    { "status": "Submitted", "time": "Aug 26, 2026 Just now", "note": f"Ticket logged {ticket_id}", "done": True },
+                    { "status": "Submitted", "time": f"{time.strftime('%b %d, %Y')} Just now", "note": f"Ticket logged {ticket_id}", "done": True },
                     { "status": "Verified", "time": "Pending", "note": "Awaiting verification", "done": False },
                     { "status": "Assigned", "time": "Pending", "note": "Awaiting dispatch", "done": False },
                     { "status": "In Progress", "time": "Pending", "note": "Pending work crew", "done": False },
@@ -454,17 +465,17 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"message": "Complaint created", "complaint": new_comp}).encode())
         else:
             self._set_headers(404)
-            self.wfile.write(json.dumps({"message": "Route not found"}).encode())
+            self.wfile.write(json.dumps({"message": "POST endpoint not found"}).encode())
 
     def do_PUT(self):
+        url = self.path.split('?')[0]
         content_length = int(self.headers.get('Content-Length', 0))
-        body_data = self.rfile.read(content_length) if content_length > 0 else b'{}'
+        body_data = self.rfile.read(content_length)
         try:
             payload = json.loads(body_data.decode('utf-8'))
         except:
             payload = {}
 
-        url = self.path
         if '/api/complaints/' in url and '/upvote' in url:
             parts = url.split('/')
             ticket_id = parts[3]
@@ -494,6 +505,10 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 complaint['status'] = norm_status
                 if 'assignedOfficer' in payload and payload['assignedOfficer']:
                     complaint['assignedOfficer'] = payload['assignedOfficer']
+                if 'department' in payload and payload['department']:
+                    complaint['department'] = payload['department']
+                if 'officerRole' in payload and payload['officerRole']:
+                    complaint['officerRole'] = payload['officerRole']
 
                 # Update timeline stages strictly based on status index
                 now_str = time.strftime('%b %d, %Y %I:%M %p')

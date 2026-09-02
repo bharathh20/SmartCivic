@@ -216,6 +216,45 @@ const getAvatarSrc = (userObj) => {
   return `${baseUrl}${path}`;
 };
 
+// Helper: Civic Department Normalization and Robust Matching
+const matchesDepartment = (complaint, targetDept) => {
+  if (!complaint) return false;
+  if (!targetDept || targetDept === 'ALL') return true;
+
+  const cleanTarget = String(targetDept).trim().toUpperCase();
+
+  // Extract all potential department/category attributes from complaint
+  const rawDept = String(complaint.department || complaint.assignedDepartment || complaint.dept || complaint.departmentName || '').trim().toUpperCase();
+  const rawCat = String(complaint.category || '').trim().toUpperCase();
+  const rawOfficer = String(complaint.assignedOfficer || '').trim().toUpperCase();
+
+  if (rawDept === cleanTarget) return true;
+
+  // Canonical alias dictionary for Bengaluru Civic Departments
+  const aliases = {
+    'PWD': ['PWD', 'PUBLIC WORKS', 'PUBLIC WORKS DEPARTMENT', 'ROADS & POTHOLES', 'ROADS', 'POTHOLE', 'ROAD REPAIR', 'RAJESH KUMAR'],
+    'BESCOM': ['BESCOM', 'POWER & STREETLIGHTS', 'POWER', 'ELECTRICITY', 'STREETLIGHT', 'ELECTRICAL', 'SURESH GOWDA'],
+    'BBMP SANITATION': ['BBMP SANITATION', 'BBMP', 'SANITATION', 'WASTE & SANITATION', 'WASTE', 'GARBAGE', 'SOLID WASTE', 'ANAND KUMAR'],
+    'BWSSB': ['BWSSB', 'WATER & SEWAGE', 'WATER', 'SEWAGE', 'DRAINAGE', 'WATER SUPPLY', 'VENKATESH R'],
+    'TRAFFIC POLICE': ['TRAFFIC POLICE', 'TRAFFIC & SAFETY', 'TRAFFIC', 'POLICE', 'ROAD SAFETY', 'RAMESH']
+  };
+
+  for (const [canonicalKey, aliasList] of Object.entries(aliases)) {
+    const isTargetThisDept = (cleanTarget === canonicalKey) || aliasList.some(a => cleanTarget.includes(a) || a.includes(cleanTarget));
+    if (isTargetThisDept) {
+      const deptMatches = rawDept && (rawDept === canonicalKey || aliasList.some(a => rawDept.includes(a) || a.includes(rawDept)));
+      const catMatches = rawCat && aliasList.some(a => rawCat.includes(a) || a.includes(rawCat));
+      const offMatches = rawOfficer && aliasList.some(a => rawOfficer.includes(a) || a.includes(rawOfficer));
+      if (deptMatches || catMatches || offMatches) return true;
+    }
+  }
+
+  // Fallback substring checks
+  if (rawDept && (rawDept.includes(cleanTarget) || cleanTarget.includes(rawDept))) return true;
+
+  return false;
+};
+
 // --- MAIN APPLICATION ENTRY COMPONENT ---
 function App() {
   // Navigation State
@@ -455,18 +494,29 @@ function App() {
       console.log('[API Complaint Submit Error]', err);
     }
 
+    const categoryDeptMap = {
+      'Roads & Potholes': { department: 'PWD', officer: 'Rajesh Kumar', role: 'PWD Chief Engineer' },
+      'Power & Streetlights': { department: 'BESCOM', officer: 'Suresh Gowda', role: 'BESCOM Electrical Linesman' },
+      'Waste & Sanitation': { department: 'BBMP Sanitation', officer: 'Anand Kumar', role: 'Sanitation Inspector Zone 3' },
+      'Water & Sewage': { department: 'BWSSB', officer: 'Venkatesh R', role: 'BWSSB Hydro Engineer' },
+      'Traffic & Safety': { department: 'Traffic Police', officer: 'Inspector Ramesh', role: 'Traffic Division Sub-Inspector' },
+      'Parks & Vegetation': { department: 'BBMP Parks & Horticulture', officer: 'Sunil Rao', role: 'Horticulture Supervisor' },
+      'Public Safety': { department: 'City Patrol Command', officer: 'Duty Officer Vikram', role: 'Command Control Inspector' }
+    };
+    const defaultInfo = categoryDeptMap[newCompData.category] || { department: 'PWD', officer: 'Rajesh Kumar', role: 'PWD Engineer' };
+
     const created = {
       id: createdTicketId,
       title: newCompData.title || 'Untitled Complaint',
       category: newCompData.category || 'Roads & Potholes',
       priority: newCompData.priority || 'Medium',
-      department: 'PWD',
+      department: (createdComplaintObj && createdComplaintObj.department) ? createdComplaintObj.department : defaultInfo.department,
       status: 'Submitted',
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      date: (createdComplaintObj && createdComplaintObj.date) ? createdComplaintObj.date : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       time: 'Just now',
-      estResolution: '3 Days',
-      assignedOfficer: 'Rajesh Kumar',
-      officerRole: 'PWD Engineer',
+      estResolution: (createdComplaintObj && createdComplaintObj.estResolution) ? createdComplaintObj.estResolution : '3 Days',
+      assignedOfficer: (createdComplaintObj && createdComplaintObj.assignedOfficer) ? createdComplaintObj.assignedOfficer : defaultInfo.officer,
+      officerRole: (createdComplaintObj && createdComplaintObj.officerRole) ? createdComplaintObj.officerRole : defaultInfo.role,
       location: newCompData.location || 'Indiranagar, Bengaluru',
       address: newCompData.location || 'Indiranagar, Bengaluru',
       description: newCompData.description || '',
@@ -501,7 +551,7 @@ function App() {
   };
 
   // Status Update Handler (Admin / Dept Officer)
-  const handleUpdateStatus = async (ticketId, status, officer, remark) => {
+  const handleUpdateStatus = async (ticketId, status, officer, remark, department) => {
     const STATUS_FLOW = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
     const targetIdx = STATUS_FLOW.findIndex(s => s.toLowerCase() === status.toLowerCase());
 
@@ -512,6 +562,7 @@ function App() {
           ...c,
           status,
           assignedOfficer: officer || c.assignedOfficer,
+          department: department || c.department,
           timeline: STATUS_FLOW.map((st, idx) => {
             const existing = (c.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
             if (idx < targetIdx) {
@@ -547,12 +598,12 @@ function App() {
       id: `n_${Date.now()}`,
       ticketId,
       title: `${ticketId} Status: ${status}`,
-      message: remark,
+      message: remark || `Your complaint status has been updated to ${status}.`,
       time: 'Just now',
       unread: true,
       isNew: true
     };
-    setNotifications([newNotif, ...notifications]);
+    setNotifications(prev => [newNotif, ...prev]);
 
     // REST API Backend Request
     try {
@@ -560,9 +611,9 @@ function App() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': authToken ? `Bearer ${authToken}` : ''
         },
-        body: JSON.stringify({ status, assignedOfficer: officer, remark })
+        body: JSON.stringify({ status, assignedOfficer: officer, remark, department })
       });
     } catch (e) {
       console.log('[API Status Update Error]', e);
@@ -3027,19 +3078,44 @@ function ProfileView({ user, onAvatarUpload, onEditProfile, onChangePassword, on
 
 
 // ==========================================
+// 10. ADMIN & DEPARTMENT DASHBOARD VIEW
+// ==========================================
+
 function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser }) {
-  const isDeptUser = currentUser.role === 'dept_officer' || currentUser.role === 'department';
-  const userDept = currentUser.department || 'PWD';
+  const isDeptUser = currentUser && (currentUser.role === 'dept_officer' || currentUser.role === 'department');
+  const userDept = (currentUser && currentUser.department) ? currentUser.department : 'PWD';
+  
+  // Department Officers default to their department queue ('PWD'), Admins default to 'ALL'
   const [filterDept, setFilterDept] = useState(isDeptUser ? userDept : 'ALL');
   const [selectedComp, setSelectedComp] = useState(null);
   const [statusVal, setStatusVal] = useState('In Progress');
-  const [officerVal, setOfficerVal] = useState(currentUser.name || 'Engineer Rajesh Kumar');
+  const [officerVal, setOfficerVal] = useState((currentUser && currentUser.name) || 'Engineer Rajesh Kumar');
   const [remarkVal, setRemarkVal] = useState('');
 
-  const authorizedComplaints = isDeptUser 
-    ? complaints.filter(c => c.department && c.department.toUpperCase() === userDept.toUpperCase()) 
+  // Scoped pool for department user vs central admin
+  // 1. If Department Officer:
+  //    - 'ALL' tab or their own department tab shows all complaints belonging/assigned to their department.
+  //    - Clicking another tab (e.g. 'BESCOM') filters to that specific department.
+  // 2. If Central Admin:
+  //    - 'ALL' tab shows full zonal complaints across all departments.
+  //    - Specific tabs filter by that department.
+  const filtered = isDeptUser
+    ? (filterDept === 'ALL'
+        ? complaints.filter(c => matchesDepartment(c, userDept))
+        : complaints.filter(c => matchesDepartment(c, filterDept)))
+    : (filterDept === 'ALL'
+        ? complaints
+        : complaints.filter(c => matchesDepartment(c, filterDept)));
+
+  // Scoped Statistics: Accurately calculated for the current user's department queue or central network
+  const statComplaints = isDeptUser
+    ? complaints.filter(c => matchesDepartment(c, userDept))
     : complaints;
-  const filtered = authorizedComplaints.filter(c => filterDept === 'ALL' || c.department === filterDept);
+
+  const totalCount = statComplaints.length;
+  const pendingCount = statComplaints.filter(c => c.status === 'Submitted' || c.status === 'Verified' || c.status === 'Pending' || c.priority === 'High').length;
+  const inProgressCount = statComplaints.filter(c => c.status === 'In Progress' || c.status === 'Assigned').length;
+  const resolvedCount = statComplaints.filter(c => c.status === 'Resolved').length;
 
   const handleSubmitUpdate = (e) => {
     e.preventDefault();
@@ -3066,13 +3142,13 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
             <div className={`text-[10px] font-extrabold uppercase tracking-widest ${
               currentUser.role === 'admin' ? 'text-purple-400' : 'text-amber-400'
             }`}>
-              {currentUser.role === 'admin' ? 'MUNICIPAL CENTRAL COMMAND' : `DEPARTMENT PORTAL — ${currentUser.department || 'OPERATIONS'}`}
+              {currentUser.role === 'admin' ? 'MUNICIPAL CENTRAL COMMAND' : `DEPARTMENT PORTAL — ${userDept} OPERATIONS`}
             </div>
             <h1 className="text-2xl font-black font-heading text-white">{currentUser.name || (currentUser.role === 'admin' ? 'Municipal Control Hub' : 'Department Officer')}</h1>
             <p className="text-xs text-slate-400">
               {currentUser.role === 'admin' 
                 ? 'Manage zonal complaints, oversee municipal departments, & verify SLA resolution rates'
-                : `Manage and resolve civic complaints assigned to ${currentUser.department || 'your department'}`}
+                : `Manage, dispatch crews, and resolve civic complaints assigned to ${userDept} department`}
             </p>
           </div>
         </div>
@@ -3086,23 +3162,23 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <div className="glass-card rounded-2xl p-6 border border-slate-800 flex flex-col gap-2">
           <span className="text-[10px] font-extrabold uppercase text-slate-400">TOTAL TICKETS</span>
-          <span className="text-3xl font-black text-white">{complaints.length}</span>
-          <span className="text-[11px] text-cyan-400 font-medium">Zone C Municipal Network</span>
+          <span className="text-3xl font-black text-white">{totalCount}</span>
+          <span className="text-[11px] text-cyan-400 font-medium">{isDeptUser ? `${userDept} Department Queue` : 'Zone C Municipal Network'}</span>
         </div>
         <div className="glass-card rounded-2xl p-6 border border-amber-500/30 bg-amber-950/10 flex flex-col gap-2">
           <span className="text-[10px] font-extrabold uppercase text-amber-400">PENDING ACTION</span>
-          <span className="text-3xl font-black text-amber-300">{complaints.filter(c => c.status === 'Submitted' || c.priority === 'High').length}</span>
-          <span className="text-[11px] text-amber-400 font-medium">Requires Inspection</span>
+          <span className="text-3xl font-black text-amber-300">{pendingCount}</span>
+          <span className="text-[11px] text-amber-400 font-medium">Requires Inspection / Crew Assignment</span>
         </div>
         <div className="glass-card rounded-2xl p-6 border border-cyan-500/30 bg-cyan-950/10 flex flex-col gap-2">
           <span className="text-[10px] font-extrabold uppercase text-cyan-400">IN PROGRESS</span>
-          <span className="text-3xl font-black text-cyan-300">{complaints.filter(c => c.status === 'In Progress' || c.status === 'Assigned').length}</span>
+          <span className="text-3xl font-black text-cyan-300">{inProgressCount}</span>
           <span className="text-[11px] text-cyan-400 font-medium">Crews Dispatched</span>
         </div>
         <div className="glass-card rounded-2xl p-6 border border-emerald-500/30 bg-emerald-950/10 flex flex-col gap-2">
           <span className="text-[10px] font-extrabold uppercase text-emerald-400">RESOLVED</span>
-          <span className="text-3xl font-black text-emerald-300">{complaints.filter(c => c.status === 'Resolved').length}</span>
-          <span className="text-[11px] text-emerald-400 font-medium">88% SLA Resolution Rate</span>
+          <span className="text-3xl font-black text-emerald-300">{resolvedCount}</span>
+          <span className="text-[11px] text-emerald-400 font-medium">{totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0}% SLA Resolution Rate</span>
         </div>
       </div>
 
@@ -3114,7 +3190,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
             onClick={() => setFilterDept(dept)}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
               filterDept === dept
-                ? 'bg-purple-500 text-slate-950 glow-cyan'
+                ? 'bg-purple-500 text-slate-950 glow-cyan font-black'
                 : 'bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white'
             }`}
           >
@@ -3138,46 +3214,62 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
-            {filtered.map(c => (
-              <tr key={c.id} className="hover:bg-slate-900/40 transition">
-                <td className="py-4 px-3 font-mono font-bold text-cyan-400">{c.id}</td>
-                <td className="py-4 px-3">
-                  <div className="font-bold text-white text-sm">{c.title}</div>
-                  <div className="text-[11px] text-slate-400">{c.category}</div>
-                </td>
-                <td className="py-4 px-3 font-semibold text-slate-300">{c.department}</td>
-                <td className="py-4 px-3">
-                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
-                    c.priority === 'High' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-amber-500/20 text-amber-400'
-                  }`}>
-                    {c.priority}
-                  </span>
-                </td>
-                <td className="py-4 px-3">
-                  <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
-                    c.status === 'Resolved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
-                    c.status === 'In Progress' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
-                    c.status === 'Assigned' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' :
-                    c.status === 'Verified' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-slate-800 text-slate-300'
-                  }`}>
-                    {c.status}
-                  </span>
-                </td>
-                <td className="py-4 px-3 text-slate-300 font-medium">{c.assignedOfficer || 'Pending Crew'}</td>
-                <td className="py-4 px-3 text-right">
-                  <button
-                    onClick={() => {
-                      setSelectedComp(c);
-                      setStatusVal(c.status);
-                      setOfficerVal(c.assignedOfficer || (currentUser.name || 'Engineer Rajesh Kumar'));
-                    }}
-                    className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold px-3 py-1.5 rounded-lg transition"
-                  >
-                    Update & Send Msg
-                  </button>
+            {filtered.length > 0 ? (
+              filtered.map(c => (
+                <tr key={c.id} className="hover:bg-slate-900/40 transition">
+                  <td className="py-4 px-3 font-mono font-bold text-cyan-400">{c.id}</td>
+                  <td className="py-4 px-3">
+                    <div className="font-bold text-white text-sm">{c.title}</div>
+                    <div className="text-[11px] text-slate-400">{c.category}</div>
+                  </td>
+                  <td className="py-4 px-3 font-semibold text-slate-300">
+                    <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-[11px] text-cyan-300">
+                      {c.department || userDept}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
+                      c.priority === 'High' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-amber-500/20 text-amber-400'
+                    }`}>
+                      {c.priority}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${
+                      c.status === 'Resolved' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' :
+                      c.status === 'In Progress' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40' :
+                      c.status === 'Assigned' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' :
+                      c.status === 'Verified' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40' : 'bg-slate-800 text-slate-300'
+                    }`}>
+                      {c.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3 text-slate-300 font-medium">{c.assignedOfficer || 'Pending Crew'}</td>
+                  <td className="py-4 px-3 text-right">
+                    <button
+                      onClick={() => {
+                        setSelectedComp(c);
+                        setStatusVal(c.status);
+                        setOfficerVal(c.assignedOfficer || (currentUser.name || 'Engineer Rajesh Kumar'));
+                      }}
+                      className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold px-3 py-1.5 rounded-lg transition"
+                    >
+                      Update & Send Msg
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="7" className="py-12 px-4 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <span className="text-3xl">📋</span>
+                    <span className="text-sm font-bold text-slate-300">No complaints found</span>
+                    <span className="text-xs text-slate-500">There are currently no civic complaints in this queue ({filterDept}).</span>
+                  </div>
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
