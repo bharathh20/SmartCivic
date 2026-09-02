@@ -137,11 +137,12 @@ const updateUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
-      user.name = req.body.name || user.name;
-      user.mobile = req.body.mobile || user.mobile;
-      user.address = req.body.address || user.address;
       if (req.body.avatar !== undefined) {
         user.avatar = req.body.avatar;
+      } else if (req.body.profileImage !== undefined) {
+        user.avatar = req.body.profileImage;
+      } else if (req.body.profilePhoto !== undefined) {
+        user.avatar = req.body.profilePhoto;
       }
 
       const updatedUser = await user.save();

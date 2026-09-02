@@ -202,6 +202,20 @@ const API_BASE_URL = (typeof window !== 'undefined' && (window.location.port ===
   ? 'http://localhost:5000/api'
   : '/api';
 
+// Helper: Resolve full Avatar Image Source across relative paths, base64 and URLs
+const getAvatarSrc = (userObj) => {
+  if (!userObj) return null;
+  const av = userObj.avatar || userObj.profilePhoto || userObj.profileImage || userObj.photo;
+  if (!av || typeof av !== 'string' || av.trim() === '') return null;
+  const trimmed = av.trim();
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  const baseUrl = API_BASE_URL.replace(/\/api\/?$/, '');
+  const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return `${baseUrl}${path}`;
+};
+
 // --- MAIN APPLICATION ENTRY COMPONENT ---
 function App() {
   // Navigation State
@@ -575,9 +589,17 @@ function App() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const base64Data = e.target.result;
+      
+      // Update state and localStorage IMMEDIATELY with zero latency
+      setCurrentUser(prev => {
+        const nextUser = { ...prev, avatar: base64Data, profileImage: base64Data, profilePhoto: base64Data };
+        localStorage.setItem('smartcivic_user', JSON.stringify(nextUser));
+        return nextUser;
+      });
+
       let finalAvatar = base64Data;
 
-      // Try uploading to server API endpoint
+      // Upload to server
       try {
         const fd = new FormData();
         fd.append('image', file);
@@ -594,18 +616,13 @@ function App() {
           }
         }
       } catch (err) {
-        console.log('[Upload API Warning, using base64]', err);
+        console.log('[Upload API Warning, retaining base64]', err);
       }
-
-      // Update State & LocalStorage
-      const updatedUser = { ...currentUser, avatar: finalAvatar };
-      setCurrentUser(updatedUser);
-      localStorage.setItem('smartcivic_user', JSON.stringify(updatedUser));
 
       // Persist to user profile in MongoDB backend
       if (authToken) {
         try {
-          await fetch(`${API_BASE_URL}/users/profile`, {
+          const resProfile = await fetch(`${API_BASE_URL}/users/profile`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -613,6 +630,16 @@ function App() {
             },
             body: JSON.stringify({ avatar: finalAvatar })
           });
+          if (resProfile.ok) {
+            const dataProfile = await resProfile.json();
+            if (dataProfile && dataProfile.user) {
+              setCurrentUser(prev => {
+                const merged = { ...prev, ...dataProfile.user, avatar: dataProfile.user.avatar || finalAvatar };
+                localStorage.setItem('smartcivic_user', JSON.stringify(merged));
+                return merged;
+              });
+            }
+          }
         } catch (err) {
           console.log('[Persist Avatar Error]', err);
         }
@@ -701,16 +728,18 @@ function App() {
                 <div 
                   onClick={() => setActiveView('profile')} 
                   className="flex items-center gap-2.5 cursor-pointer bg-slate-900 border border-slate-800 hover:border-cyan-500/50 px-3 py-1.5 rounded-full transition"
+                  title="View Profile"
                 >
-                  <div className="w-7 h-7 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center overflow-hidden border border-cyan-400">
-                    {currentUser.avatar ? (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center overflow-hidden border-2 border-cyan-400 shadow-md">
+                    {getAvatarSrc(currentUser) ? (
                       <img 
-                        src={currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('data:') ? currentUser.avatar : (API_BASE_URL.replace('/api', '') + currentUser.avatar)} 
-                        alt={currentUser.name} 
+                        src={getAvatarSrc(currentUser)} 
+                        alt={currentUser.name || 'User Avatar'} 
                         className="w-full h-full object-cover" 
+                        onError={(e) => { e.target.style.display = 'none'; }}
                       />
                     ) : (
-                      currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'C'
+                      <span className="font-black text-xs text-slate-950">{currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'C'}</span>
                     )}
                   </div>
                   <span className="text-xs font-semibold text-slate-200">{currentUser.name || 'Citizen User'}</span>
@@ -844,6 +873,12 @@ function App() {
             activeView={activeView}
             setActiveView={setActiveView}
             onOpenLogin={() => setActiveView('login')}
+            isLoggedIn={isLoggedIn}
+            currentUser={currentUser}
+            onProfileClick={() => {
+              setIsLoggedIn(true);
+              setActiveView('profile');
+            }}
           />
 
           {/* PUBLIC CONTENT AREA */}
@@ -1044,7 +1079,7 @@ function App() {
 // 1. NAVIGATION & SIDEBAR COMPONENTS
 // ==========================================
 
-function PublicNavbar({ activeView, setActiveView, onOpenLogin }) {
+function PublicNavbar({ activeView, setActiveView, onOpenLogin, isLoggedIn, currentUser, onProfileClick }) {
   return (
     <header className="sticky top-0 z-40 bg-[#080C14]/90 backdrop-blur-xl border-b border-slate-800/80 px-6 lg:px-12 h-20 flex items-center justify-between">
       {/* Brand Logo */}
@@ -1088,12 +1123,34 @@ function PublicNavbar({ activeView, setActiveView, onOpenLogin }) {
 
       {/* Right Side Action + Logo */}
       <div className="flex items-center gap-4">
-        <button 
-          onClick={onOpenLogin}
-          className="btn-cyan-outline px-5 py-2 rounded-xl text-sm font-bold tracking-wide transition shadow-sm"
-        >
-          Login / Register
-        </button>
+        {isLoggedIn ? (
+          <div 
+            onClick={onProfileClick || (() => setActiveView('profile'))}
+            className="flex items-center gap-2.5 cursor-pointer bg-slate-900 border border-slate-800 hover:border-cyan-500/50 px-3 py-1.5 rounded-full transition shadow-sm"
+            title="View Profile"
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyan-500 to-sky-400 text-slate-950 font-bold text-xs flex items-center justify-center overflow-hidden border-2 border-cyan-400 shadow-md">
+              {getAvatarSrc(currentUser) ? (
+                <img 
+                  src={getAvatarSrc(currentUser)} 
+                  alt={currentUser ? currentUser.name : 'User'} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <span className="font-black text-xs text-slate-950">{currentUser && currentUser.name ? currentUser.name.charAt(0).toUpperCase() : 'C'}</span>
+              )}
+            </div>
+            <span className="text-xs font-semibold text-slate-200">{currentUser ? currentUser.name : 'Profile'}</span>
+          </div>
+        ) : (
+          <button 
+            onClick={onOpenLogin}
+            className="btn-cyan-outline px-5 py-2 rounded-xl text-sm font-bold tracking-wide transition shadow-sm"
+          >
+            Login / Register
+          </button>
+        )}
 
         {/* CODE MORPHICX Logo Badge (Top Right Corner) */}
         <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
@@ -2857,14 +2914,15 @@ function ProfileView({ user, onAvatarUpload, onEditProfile, onChangePassword, on
                 className="w-24 h-24 rounded-full bg-gradient-to-tr from-cyan-500 to-sky-400 text-slate-950 font-black text-3xl flex items-center justify-center glow-cyan shadow-xl overflow-hidden cursor-pointer border-2 border-cyan-400 transition hover:scale-105"
                 title="Click to upload profile photo"
               >
-                {user.avatar ? (
+                {getAvatarSrc(user) ? (
                   <img 
-                    src={user.avatar.startsWith('http') || user.avatar.startsWith('data:') ? user.avatar : (API_BASE_URL.replace('/api', '') + user.avatar)} 
-                    alt={user.name} 
+                    src={getAvatarSrc(user)} 
+                    alt={user.name || 'Profile Photo'} 
                     className="w-full h-full object-cover" 
+                    onError={(e) => { e.target.style.display = 'none'; }}
                   />
                 ) : (
-                  user.name ? user.name.charAt(0).toUpperCase() : 'C'
+                  <span className="font-black text-3xl text-slate-950">{user.name ? user.name.charAt(0).toUpperCase() : 'C'}</span>
                 )}
               </div>
               <button 
@@ -3325,14 +3383,15 @@ function EditProfileModal({ user, onClose, onSave }) {
             className="w-16 h-16 rounded-full bg-cyan-500 text-slate-950 font-bold text-xl flex items-center justify-center overflow-hidden border-2 border-cyan-400 cursor-pointer shadow-lg hover:scale-105 transition"
             title="Click to change photo"
           >
-            {formData.avatar ? (
+            {getAvatarSrc(formData) ? (
               <img 
-                src={formData.avatar.startsWith('http') || formData.avatar.startsWith('data:') ? formData.avatar : (API_BASE_URL.replace('/api', '') + formData.avatar)} 
+                src={getAvatarSrc(formData)} 
                 alt="Avatar Preview" 
                 className="w-full h-full object-cover" 
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             ) : (
-              formData.name ? formData.name.charAt(0).toUpperCase() : 'C'
+              <span className="font-black text-xl text-slate-950">{formData.name ? formData.name.charAt(0).toUpperCase() : 'C'}</span>
             )}
           </div>
           <div className="flex flex-col gap-1">

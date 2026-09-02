@@ -556,6 +556,8 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             if 'mobile' in payload: user['mobile'] = payload['mobile']
             if 'address' in payload: user['address'] = payload['address']
             if 'avatar' in payload: user['avatar'] = payload['avatar']
+            elif 'profileImage' in payload: user['avatar'] = payload['profileImage']
+            elif 'profilePhoto' in payload: user['avatar'] = payload['profilePhoto']
             self._set_headers(200)
             self.wfile.write(json.dumps({"message": "Profile updated successfully", "user": user}).encode())
         elif url == '/api/users/change-password':
