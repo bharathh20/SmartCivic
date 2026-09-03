@@ -1838,7 +1838,9 @@ function DepartmentLoginView({ onLoginSuccess, onSwitchCitizen, onSwitchAdmin })
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-amber-300">Department Email Address</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-amber-300">Department Email Address</label>
+            </div>
             <input 
               type="email" 
               required
@@ -1847,6 +1849,26 @@ function DepartmentLoginView({ onLoginSuccess, onSwitchCitizen, onSwitchAdmin })
               placeholder="officer.pwd@smartcivic.gov.in"
               className="w-full bg-slate-950/80 border border-slate-800 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 outline-none transition"
             />
+            {/* Quick Demo Department Accounts */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="text-[10px] text-slate-500 font-semibold w-full">Quick-Fill Department:</span>
+              {[
+                { label: 'PWD', email: 'officer.pwd@smartcivic.gov.in' },
+                { label: 'BESCOM', email: 'officer.bescom@smartcivic.gov.in' },
+                { label: 'BWSSB', email: 'officer.bwssb@smartcivic.gov.in' },
+                { label: 'Traffic Police', email: 'officer.traffic@smartcivic.gov.in' },
+                { label: 'BBMP Sanitation', email: 'officer.sanitation@smartcivic.gov.in' }
+              ].map(d => (
+                <button
+                  key={d.label}
+                  type="button"
+                  onClick={() => { setEmail(d.email); setPassword('officer123'); }}
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-900 hover:bg-amber-500/20 border border-slate-800 hover:border-amber-500/40 text-slate-300 hover:text-amber-300 transition"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5 relative">
