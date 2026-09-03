@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Complaint = require('../models/Complaint');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -71,7 +72,10 @@ const updateComplaintStatus = async (req, res) => {
     const { status, assignedOfficer, officerRole, remark, department } = req.body;
 
     const complaint = await Complaint.findOne({
-      $or: [{ ticketId: req.params.id }, { _id: req.params.id }]
+      $or: [
+        { ticketId: req.params.id },
+        { _id: mongoose.isValidObjectId(req.params.id) ? req.params.id : null }
+      ]
     });
 
     if (!complaint) {

@@ -6,8 +6,8 @@ const CATEGORY_DEPARTMENT_MAP = {
   'Waste & Sanitation': { department: 'BBMP Sanitation', officer: 'Anand Kumar', role: 'Sanitation Inspector Zone 3' },
   'Water & Sewage': { department: 'BWSSB', officer: 'Venkatesh R', role: 'BWSSB Hydro Engineer' },
   'Traffic & Safety': { department: 'Traffic Police', officer: 'Inspector Ramesh', role: 'Traffic Division Sub-Inspector' },
-  'Parks & Vegetation': { department: 'BBMP Parks & Horticulture', officer: 'Sunil Rao', role: 'Horticulture Supervisor' },
-  'Public Safety': { department: 'City Patrol Command', officer: 'Duty Officer Vikram', role: 'Command Control Inspector' }
+  'Parks & Vegetation': { department: 'BBMP Sanitation', officer: 'Anand Kumar', role: 'Sanitation Inspector Zone 3' },
+  'Public Safety': { department: 'Traffic Police', officer: 'Inspector Ramesh', role: 'Traffic Division Sub-Inspector' }
 };
 
 const calculateEstResolution = (priority) => {

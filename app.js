@@ -287,6 +287,84 @@ function App() {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Session Verification & Backend Sync on Mount
+  // Helper: Standardized mapping of DB complaint to React state
+  const mapComplaintFromDb = (c) => ({
+    id: c.ticketId || c._id,
+    ticketId: c.ticketId || c._id,
+    _id: c._id || c.ticketId,
+    title: c.title,
+    category: c.category,
+    priority: c.priority,
+    department: c.department,
+    status: c.status,
+    date: c.date || 'Aug 26, 2026',
+    time: c.time || 'Just now',
+    estResolution: c.estResolution,
+    assignedOfficer: c.assignedOfficer,
+    officerRole: c.officerRole,
+    location: c.location,
+    address: c.address || c.location,
+    description: c.description,
+    upvotes: c.upvotes || 0,
+    hasUpvoted: false,
+    images: c.images || [],
+    timeline: c.timeline || []
+  });
+
+  // Authenticated Citizen Complaints Fetcher (GET /api/complaints/user)
+  const fetchCitizenComplaints = async (tokenOverride) => {
+    const token = tokenOverride || authToken || localStorage.getItem('smartcivic_jwt_token');
+    if (!token) return;
+    try {
+      const resComp = await fetch(`${API_BASE_URL}/complaints/user`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resComp.ok) {
+        const dataComp = await resComp.json();
+        if (Array.isArray(dataComp)) {
+          setComplaints(dataComp.map(mapComplaintFromDb));
+        }
+      }
+    } catch (err) {
+      console.log('[Fetch Citizen Complaints Error]', err);
+    }
+  };
+
+  // Authenticated Admin / Department Complaints Fetcher (GET /api/admin/complaints - Requirement G)
+  const fetchAdminDeptComplaints = async (tokenOverride) => {
+    const token = tokenOverride || authToken || localStorage.getItem('smartcivic_jwt_token');
+    if (!token) return;
+    try {
+      const resComp = await fetch(`${API_BASE_URL}/admin/complaints`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resComp.ok) {
+        const dataComp = await resComp.json();
+        if (Array.isArray(dataComp)) {
+          setComplaints(dataComp.map(mapComplaintFromDb));
+        }
+      }
+    } catch (err) {
+      console.log('[Fetch Admin/Dept Complaints Error]', err);
+    }
+  };
+
+  // Alias for backward compatibility
+  const fetchGlobalComplaints = fetchAdminDeptComplaints;
+
+  // Unified refresh dispatcher based on role
+  const refreshComplaints = () => {
+    const token = authToken || localStorage.getItem('smartcivic_jwt_token');
+    if (!token) return;
+    const isStaff = currentUser && (currentUser.role === 'admin' || currentUser.role === 'dept_officer' || currentUser.role === 'department');
+    if (isStaff) {
+      fetchAdminDeptComplaints(token);
+    } else {
+      fetchCitizenComplaints(token);
+    }
+  };
+
+  // Session Verification & Backend Sync on Mount
   useEffect(() => {
     const savedToken = localStorage.getItem('smartcivic_jwt_token');
     if (savedToken) {
@@ -299,8 +377,8 @@ function App() {
           setCurrentUser(data.user);
           localStorage.setItem('smartcivic_user', JSON.stringify(data.user));
           setIsLoggedIn(true);
-          if (data.user.role === 'admin' || data.user.role === 'dept_officer') {
-            fetchGlobalComplaints();
+          if (data.user.role === 'admin' || data.user.role === 'dept_officer' || data.user.role === 'department') {
+            fetchAdminDeptComplaints(savedToken);
           } else {
             fetchCitizenComplaints(savedToken);
           }
@@ -336,77 +414,38 @@ function App() {
     fetchNotifData();
   }, []);
 
-  const fetchCitizenComplaints = async (token) => {
-    if (!token) {
-      setComplaints([]);
-      return;
-    }
-    try {
-      const resComp = await fetch(`${API_BASE_URL}/complaints/user`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (resComp.ok) {
-        const dataComp = await resComp.json();
-        if (Array.isArray(dataComp)) {
-          setComplaints(dataComp.map(c => ({
-            id: c.ticketId || c._id,
-            title: c.title,
-            category: c.category,
-            priority: c.priority,
-            department: c.department,
-            status: c.status,
-            date: c.date || 'Aug 26, 2026',
-            time: c.time || 'Just now',
-            estResolution: c.estResolution,
-            assignedOfficer: c.assignedOfficer,
-            officerRole: c.officerRole,
-            location: c.location,
-            address: c.address || c.location,
-            description: c.description,
-            upvotes: c.upvotes || 0,
-            hasUpvoted: false,
-            images: c.images || [],
-            timeline: c.timeline || []
-          })));
-        }
-      }
-    } catch (err) {
-      console.log('[Fetch Citizen Complaints Error]', err);
-    }
-  };
+  // Safe Refresh Mechanism: View changes, Tab visibility, & Single Periodic Timer (Requirements D & E)
+  useEffect(() => {
+    if (!isLoggedIn) return;
 
-  const fetchGlobalComplaints = async () => {
-    try {
-      const resComp = await fetch(`${API_BASE_URL}/complaints`);
-      if (resComp.ok) {
-        const dataComp = await resComp.json();
-        if (Array.isArray(dataComp)) {
-          setComplaints(dataComp.map(c => ({
-            id: c.ticketId || c._id,
-            title: c.title,
-            category: c.category,
-            priority: c.priority,
-            department: c.department,
-            status: c.status,
-            date: c.date || 'Aug 26, 2026',
-            time: c.time || 'Just now',
-            estResolution: c.estResolution,
-            assignedOfficer: c.assignedOfficer,
-            officerRole: c.officerRole,
-            location: c.location,
-            address: c.address || c.location,
-            description: c.description,
-            upvotes: c.upvotes || 0,
-            hasUpvoted: false,
-            images: c.images || [],
-            timeline: c.timeline || []
-          })));
-        }
-      }
-    } catch (err) {
-      console.log('[Fetch Global Complaints Error]', err);
+    // A) Refresh on view changes (Citizen dashboard, My Complaints, Track, or Dept Portal open)
+    if (
+      activeView === 'dashboard' ||
+      activeView === 'my_complaints' ||
+      activeView === 'track_complaint' ||
+      activeView === 'admin_dashboard'
+    ) {
+      refreshComplaints();
     }
-  };
+
+    // B) Refresh when browser/tab becomes visible
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshComplaints();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // C) Periodic refresh interval using a SINGLE timer, properly cleaned up
+    const intervalTimer = setInterval(() => {
+      refreshComplaints();
+    }, 5000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(intervalTimer);
+    };
+  }, [isLoggedIn, activeView, currentUser]);
 
   // Helper: Trigger Toast
   const triggerToast = (msg, type = 'success') => {
@@ -500,8 +539,8 @@ function App() {
       'Waste & Sanitation': { department: 'BBMP Sanitation', officer: 'Anand Kumar', role: 'Sanitation Inspector Zone 3' },
       'Water & Sewage': { department: 'BWSSB', officer: 'Venkatesh R', role: 'BWSSB Hydro Engineer' },
       'Traffic & Safety': { department: 'Traffic Police', officer: 'Inspector Ramesh', role: 'Traffic Division Sub-Inspector' },
-      'Parks & Vegetation': { department: 'BBMP Parks & Horticulture', officer: 'Sunil Rao', role: 'Horticulture Supervisor' },
-      'Public Safety': { department: 'City Patrol Command', officer: 'Duty Officer Vikram', role: 'Command Control Inspector' }
+      'Parks & Vegetation': { department: 'BBMP Sanitation', officer: 'Anand Kumar', role: 'Sanitation Inspector Zone 3' },
+      'Public Safety': { department: 'Traffic Police', officer: 'Inspector Ramesh', role: 'Traffic Division Sub-Inspector' }
     };
     const defaultInfo = categoryDeptMap[newCompData.category] || { department: 'PWD', officer: 'Rajesh Kumar', role: 'PWD Engineer' };
 
@@ -550,48 +589,85 @@ function App() {
     }
   };
 
-  // Status Update Handler (Admin / Dept Officer)
-  const handleUpdateStatus = async (ticketId, status, officer, remark, department) => {
+  // Status Update Handler (Admin / Dept Officer - Requirements B, C, H)
+  const handleUpdateStatus = async (ticketId, status, officer, officerRole, remark, department) => {
     const STATUS_FLOW = ['Submitted', 'Verified', 'Assigned', 'In Progress', 'Resolved'];
     const targetIdx = STATUS_FLOW.findIndex(s => s.toLowerCase() === status.toLowerCase());
 
-    // Local State Update
-    setComplaints(prev => prev.map(c => {
-      if (c.id === ticketId) {
-        return {
-          ...c,
-          status,
-          assignedOfficer: officer || c.assignedOfficer,
-          department: department || c.department,
-          timeline: STATUS_FLOW.map((st, idx) => {
-            const existing = (c.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
-            if (idx < targetIdx) {
-              return {
-                status: st,
-                time: existing.time && existing.time !== 'Pending' ? existing.time : 'Completed',
-                note: existing.note || `${st} stage completed`,
-                done: true
-              };
-            } else if (idx === targetIdx) {
-              return {
-                status: st,
-                time: 'Just now',
-                note: remark || (existing.note && existing.note !== 'Pending' ? existing.note : `Status updated to ${status}`),
-                done: true
-              };
-            } else {
-              return {
-                status: st,
-                time: 'Pending',
-                note: existing.note && existing.note.startsWith('Pending') ? existing.note : `Awaiting ${st.toLowerCase()} stage`,
-                done: false
-              };
-            }
-          })
-        };
-      }
-      return c;
-    }));
+    const token = authToken || localStorage.getItem('smartcivic_jwt_token');
+
+    // REST API Backend Request
+    const res = await fetch(`${API_BASE_URL}/admin/complaints/${ticketId}/status`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
+      body: JSON.stringify({
+        status,
+        assignedOfficer: officer,
+        officerRole,
+        remark,
+        department
+      })
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to update complaint status');
+    }
+
+    const resData = await res.json();
+    console.log('[Admin PUT Status Update Response]', resData);
+    const updatedComp = resData.complaint;
+
+    // Update Local State with confirmed backend data
+    if (updatedComp) {
+      setComplaints(prev => prev.map(c => {
+        if (c.id === ticketId || c.ticketId === ticketId) {
+          return mapComplaintFromDb(updatedComp);
+        }
+        return c;
+      }));
+    } else {
+      setComplaints(prev => prev.map(c => {
+        if (c.id === ticketId) {
+          return {
+            ...c,
+            status,
+            assignedOfficer: officer || c.assignedOfficer,
+            officerRole: officerRole || c.officerRole,
+            department: department || c.department,
+            timeline: STATUS_FLOW.map((st, idx) => {
+              const existing = (c.timeline || []).find(t => t.status && t.status.toLowerCase() === st.toLowerCase()) || {};
+              if (idx < targetIdx) {
+                return {
+                  status: st,
+                  time: existing.time && existing.time !== 'Pending' ? existing.time : 'Completed',
+                  note: existing.note || `${st} stage completed`,
+                  done: true
+                };
+              } else if (idx === targetIdx) {
+                return {
+                  status: st,
+                  time: 'Just now',
+                  note: remark || (existing.note && existing.note !== 'Pending' ? existing.note : `Status updated to ${status}`),
+                  done: true
+                };
+              } else {
+                return {
+                  status: st,
+                  time: 'Pending',
+                  note: existing.note && existing.note.startsWith('Pending') ? existing.note : `Awaiting ${st.toLowerCase()} stage`,
+                  done: false
+                };
+              }
+            })
+          };
+        }
+        return c;
+      }));
+    }
 
     // Notification Message Generation for Citizen Receiving
     const newNotif = {
@@ -604,20 +680,6 @@ function App() {
       isNew: true
     };
     setNotifications(prev => [newNotif, ...prev]);
-
-    // REST API Backend Request
-    try {
-      await fetch(`${API_BASE_URL}/admin/complaints/${ticketId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authToken ? `Bearer ${authToken}` : ''
-        },
-        body: JSON.stringify({ status, assignedOfficer: officer, remark, department })
-      });
-    } catch (e) {
-      console.log('[API Status Update Error]', e);
-    }
 
     triggerToast(`Status for ${ticketId} updated to ${status}. Notification dispatched to citizen!`);
   };
@@ -3085,44 +3147,55 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
   const isDeptUser = currentUser && (currentUser.role === 'dept_officer' || currentUser.role === 'department');
   const userDept = (currentUser && currentUser.department) ? currentUser.department : 'PWD';
   
-  // Department Officers default to their department queue ('PWD'), Admins default to 'ALL'
+  // Department Officers default to their department queue, Admins default to 'ALL'
   const [filterDept, setFilterDept] = useState(isDeptUser ? userDept : 'ALL');
   const [selectedComp, setSelectedComp] = useState(null);
   const [statusVal, setStatusVal] = useState('In Progress');
+  const [departmentVal, setDepartmentVal] = useState('PWD');
   const [officerVal, setOfficerVal] = useState((currentUser && currentUser.name) || 'Engineer Rajesh Kumar');
+  const [officerRoleVal, setOfficerRoleVal] = useState('Chief Dispatch Engineer');
   const [remarkVal, setRemarkVal] = useState('');
 
-  // Scoped pool for department user vs central admin
-  // 1. If Department Officer:
-  //    - 'ALL' tab or their own department tab shows all complaints belonging/assigned to their department.
-  //    - Clicking another tab (e.g. 'BESCOM') filters to that specific department.
-  // 2. If Central Admin:
-  //    - 'ALL' tab shows full zonal complaints across all departments.
-  //    - Specific tabs filter by that department.
+  // Requirement F: Department Filter
+  // For a department officer:
+  // userDept = currentUser.department
+  // The Department Portal must ONLY display complaints whose:
+  // complaint.department === userDept
+  // Do not rely on category text for filtering.
+  // For ALL: department officer ALL means ALL complaints belonging to THEIR department only.
+  const scopedComplaints = isDeptUser
+    ? complaints.filter(c => c.department === userDept)
+    : complaints;
+
   const filtered = isDeptUser
-    ? (filterDept === 'ALL'
-        ? complaints.filter(c => matchesDepartment(c, userDept))
-        : complaints.filter(c => matchesDepartment(c, filterDept)))
-    : (filterDept === 'ALL'
-        ? complaints
-        : complaints.filter(c => matchesDepartment(c, filterDept)));
+    ? scopedComplaints
+    : (filterDept === 'ALL' ? complaints : complaints.filter(c => c.department === filterDept));
 
   // Scoped Statistics: Accurately calculated for the current user's department queue or central network
-  const statComplaints = isDeptUser
-    ? complaints.filter(c => matchesDepartment(c, userDept))
-    : complaints;
+  const statComplaints = scopedComplaints;
 
   const totalCount = statComplaints.length;
   const pendingCount = statComplaints.filter(c => c.status === 'Submitted' || c.status === 'Verified' || c.status === 'Pending' || c.priority === 'High').length;
   const inProgressCount = statComplaints.filter(c => c.status === 'In Progress' || c.status === 'Assigned').length;
   const resolvedCount = statComplaints.filter(c => c.status === 'Resolved').length;
 
-  const handleSubmitUpdate = (e) => {
+  const handleSubmitUpdate = async (e) => {
     e.preventDefault();
     if (!selectedComp) return;
-    onUpdateStatus(selectedComp.id, statusVal, officerVal, remarkVal || `Status updated to ${statusVal}`);
-    setSelectedComp(null);
-    setRemarkVal('');
+    try {
+      await onUpdateStatus(
+        selectedComp.id,
+        statusVal,
+        officerVal,
+        officerRoleVal,
+        remarkVal || `Status updated to ${statusVal}`,
+        departmentVal
+      );
+      setSelectedComp(null);
+      setRemarkVal('');
+    } catch (err) {
+      alert(err.message || 'Status update failed');
+    }
   };
 
   return (
@@ -3184,7 +3257,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
 
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        {['ALL', 'PWD', 'BESCOM', 'BBMP Sanitation', 'BWSSB', 'Traffic Police'].map(dept => (
+        {(isDeptUser ? ['ALL', userDept] : ['ALL', 'PWD', 'BESCOM', 'BBMP Sanitation', 'BWSSB', 'Traffic Police']).map(dept => (
           <button
             key={dept}
             onClick={() => setFilterDept(dept)}
@@ -3194,7 +3267,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                 : 'bg-slate-900/80 border border-slate-800 text-slate-400 hover:text-white'
             }`}
           >
-            {dept}
+            {dept === 'ALL' && isDeptUser ? `ALL (${userDept})` : dept}
           </button>
         ))}
       </div>
@@ -3249,8 +3322,11 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                     <button
                       onClick={() => {
                         setSelectedComp(c);
-                        setStatusVal(c.status);
+                        setStatusVal(c.status || 'Submitted');
+                        setDepartmentVal(c.department || (isDeptUser ? userDept : 'PWD'));
                         setOfficerVal(c.assignedOfficer || (currentUser.name || 'Engineer Rajesh Kumar'));
+                        setOfficerRoleVal(c.officerRole || (isDeptUser ? `${userDept} Officer` : 'Zonal Engineer'));
+                        setRemarkVal('');
                       }}
                       className="bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 font-bold px-3 py-1.5 rounded-lg transition"
                     >
@@ -3265,7 +3341,7 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                   <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
                     <span className="text-3xl">📋</span>
                     <span className="text-sm font-bold text-slate-300">No complaints found</span>
-                    <span className="text-xs text-slate-500">There are currently no civic complaints in this queue ({filterDept}).</span>
+                    <span className="text-xs text-slate-500">There are currently no civic complaints in this queue ({isDeptUser ? userDept : filterDept}).</span>
                   </div>
                 </td>
               </tr>
@@ -3302,6 +3378,22 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                 </select>
               </div>
 
+              {/* Requirement B: Department Selection Dropdown */}
+              <div className="flex flex-col gap-1.5">
+                <label className="font-semibold text-slate-300">Assigned Department (Routing)</label>
+                <select
+                  value={departmentVal}
+                  onChange={(e) => setDepartmentVal(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-purple-500"
+                >
+                  <option value="PWD">PWD (Public Works Department)</option>
+                  <option value="BESCOM">BESCOM (Electricity & Power)</option>
+                  <option value="BBMP Sanitation">BBMP Sanitation (Solid Waste & Hygiene)</option>
+                  <option value="BWSSB">BWSSB (Water Supply & Sewage)</option>
+                  <option value="Traffic Police">Traffic Police (Road Safety & Traffic Control)</option>
+                </select>
+              </div>
+
               <div className="flex flex-col gap-1.5">
                 <label className="font-semibold text-slate-300">Assigned Field Engineer / Officer</label>
                 <input
@@ -3309,6 +3401,17 @@ function AdminDashboardView({ complaints, onUpdateStatus, onLogout, currentUser 
                   value={officerVal}
                   onChange={(e) => setOfficerVal(e.target.value)}
                   placeholder="e.g. Engineer Rajesh Kumar"
+                  className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="font-semibold text-slate-300">Officer Designation / Role</label>
+                <input
+                  type="text"
+                  value={officerRoleVal}
+                  onChange={(e) => setOfficerRoleVal(e.target.value)}
+                  placeholder="e.g. Chief Dispatch Engineer"
                   className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white outline-none focus:border-purple-500"
                 />
               </div>

@@ -38,6 +38,10 @@ const userSchema = new mongoose.Schema(
       enum: ['citizen', 'admin', 'dept_officer'],
       default: 'citizen'
     },
+    department: {
+      type: String,
+      default: ''
+    },
     badge: {
       type: String,
       default: 'VERIFIED CITIZEN'

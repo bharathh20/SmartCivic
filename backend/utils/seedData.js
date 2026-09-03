@@ -132,17 +132,59 @@ const seedDB = async () => {
       role: 'citizen'
     });
 
-    // Create Default Department Officer User
-    await User.create({
-      name: 'Rajesh Kumar (PWD Officer)',
-      email: 'officer.pwd@smartcivic.gov.in',
-      password: 'officer123',
-      mobile: '+91 98450 12345',
-      address: 'PWD Sub-Division Office, Indiranagar',
-      role: 'dept_officer',
-      department: 'PWD',
-      badge: 'CHIEF DISPATCH ENGINEER'
-    });
+    // Create Canonical Department Officer Users
+    await User.create([
+      {
+        name: 'Rajesh Kumar (PWD Officer)',
+        email: 'officer.pwd@smartcivic.gov.in',
+        password: 'officer123',
+        mobile: '+91 98450 12345',
+        address: 'PWD Sub-Division Office, Indiranagar',
+        role: 'dept_officer',
+        department: 'PWD',
+        badge: 'CHIEF DISPATCH ENGINEER'
+      },
+      {
+        name: 'Suresh Gowda (BESCOM Officer)',
+        email: 'officer.bescom@smartcivic.gov.in',
+        password: 'officer123',
+        mobile: '+91 98450 12345',
+        address: 'BESCOM Sub-Station, Indiranagar',
+        role: 'dept_officer',
+        department: 'BESCOM',
+        badge: 'BESCOM CHIEF ENGINEER'
+      },
+      {
+        name: 'Anand Kumar (Sanitation Officer)',
+        email: 'officer.sanitation@smartcivic.gov.in',
+        password: 'officer123',
+        mobile: '+91 98450 12345',
+        address: 'BBMP Solid Waste Management Division, Bengaluru',
+        role: 'dept_officer',
+        department: 'BBMP Sanitation',
+        badge: 'CHIEF SANITATION INSPECTOR'
+      },
+      {
+        name: 'Venkatesh R (BWSSB Officer)',
+        email: 'officer.bwssb@smartcivic.gov.in',
+        password: 'officer123',
+        mobile: '+91 98450 12345',
+        address: 'BWSSB Water Supply & Sewerage Board, Bengaluru',
+        role: 'dept_officer',
+        department: 'BWSSB',
+        badge: 'CHIEF HYDRO ENGINEER'
+      },
+      {
+        name: 'Inspector Ramesh (Traffic Police)',
+        email: 'officer.traffic@smartcivic.gov.in',
+        password: 'officer123',
+        mobile: '+91 98450 12345',
+        address: 'Traffic Police Control Station, Bengaluru',
+        role: 'dept_officer',
+        department: 'Traffic Police',
+        badge: 'TRAFFIC DIVISION COMMAND'
+      }
+    ]);
 
     // Create Default Admin User
     const admin = await User.create({

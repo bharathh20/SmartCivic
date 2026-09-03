@@ -12,7 +12,7 @@ dotenv.config();
 // Initialize Express app
 const app = express();
 
-// Connect to Database & Auto-Seed if empty
+// Connect to Database, Auto-Seed if empty, & Run Safe Migration
 connectDB().then(async () => {
   try {
     const userCount = await User.countDocuments();
@@ -20,6 +20,10 @@ connectDB().then(async () => {
       console.log('[Auto-Seed] Fresh MongoDB database detected. Populating initial seed data...');
       const seedDB = require('./utils/seedData');
       await seedDB();
+    } else {
+      // Safe Migration without resetting database or deleting data
+      const runSafeMigration = require('./utils/migrateData');
+      await runSafeMigration();
     }
   } catch (err) {
     // Non-blocking catch

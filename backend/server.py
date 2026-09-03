@@ -23,6 +23,7 @@ USERS_DB = [
         "address": "123, 5th Cross, Indiranagar, Bengaluru 560038",
         "avatar": "",
         "badge": "VERIFIED CITIZEN",
+        "department": "",
         "zone": "Bengaluru Municipal Zone C",
         "memberSince": "September 2026"
     },
@@ -32,6 +33,7 @@ USERS_DB = [
         "email": "admin@smartcivic.gov.in",
         "password": "adminpassword123",
         "role": "admin",
+        "department": "",
         "mobile": "+91 99000 11223",
         "address": "BBMP Zone C Headquarters, Bengaluru",
         "avatar": "",
@@ -52,6 +54,62 @@ USERS_DB = [
         "badge": "CHIEF DISPATCH ENGINEER",
         "zone": "Bengaluru Zone C — PWD Division",
         "memberSince": "September 2026"
+    },
+    {
+        "_id": "officer_bescom_001",
+        "name": "Suresh Gowda (BESCOM Officer)",
+        "email": "officer.bescom@smartcivic.gov.in",
+        "password": "officer123",
+        "role": "dept_officer",
+        "department": "BESCOM",
+        "mobile": "+91 98450 12345",
+        "address": "BESCOM Sub-Station, Indiranagar",
+        "avatar": "",
+        "badge": "BESCOM CHIEF ENGINEER",
+        "zone": "Bengaluru Zone C — BESCOM Division",
+        "memberSince": "September 2026"
+    },
+    {
+        "_id": "officer_sanitation_001",
+        "name": "Anand Kumar (Sanitation Officer)",
+        "email": "officer.sanitation@smartcivic.gov.in",
+        "password": "officer123",
+        "role": "dept_officer",
+        "department": "BBMP Sanitation",
+        "mobile": "+91 98450 12345",
+        "address": "BBMP Solid Waste Management Division, Bengaluru",
+        "avatar": "",
+        "badge": "CHIEF SANITATION INSPECTOR",
+        "zone": "Bengaluru Zone C — BBMP Sanitation Division",
+        "memberSince": "September 2026"
+    },
+    {
+        "_id": "officer_bwssb_001",
+        "name": "Venkatesh R (BWSSB Officer)",
+        "email": "officer.bwssb@smartcivic.gov.in",
+        "password": "officer123",
+        "role": "dept_officer",
+        "department": "BWSSB",
+        "mobile": "+91 98450 12345",
+        "address": "BWSSB Water Supply & Sewerage Board, Bengaluru",
+        "avatar": "",
+        "badge": "CHIEF HYDRO ENGINEER",
+        "zone": "Bengaluru Zone C — BWSSB Division",
+        "memberSince": "September 2026"
+    },
+    {
+        "_id": "officer_traffic_001",
+        "name": "Inspector Ramesh (Traffic Police)",
+        "email": "officer.traffic@smartcivic.gov.in",
+        "password": "officer123",
+        "role": "dept_officer",
+        "department": "Traffic Police",
+        "mobile": "+91 98450 12345",
+        "address": "Traffic Police Control Station, Bengaluru",
+        "avatar": "",
+        "badge": "TRAFFIC DIVISION COMMAND",
+        "zone": "Bengaluru Zone C — Traffic Division",
+        "memberSince": "September 2026"
     }
 ]
 
@@ -59,6 +117,7 @@ COMPLAINTS_DB = [
     {
         "_id": "60d5ecb8b3b7c82b8c8b4567",
         "ticketId": "SC-2026-0041",
+        "createdBy": "user_001",
         "title": "Pothole on MG Road",
         "category": "Roads & Potholes",
         "priority": "High",
@@ -93,6 +152,7 @@ COMPLAINTS_DB = [
     {
         "_id": "60d5ecb8b3b7c82b8c8b4568",
         "ticketId": "SC-2026-0038",
+        "createdBy": "user_001",
         "title": "Broken streetlight — Block C",
         "category": "Power & Streetlights",
         "priority": "Medium",
@@ -125,6 +185,7 @@ COMPLAINTS_DB = [
     {
         "_id": "60d5ecb8b3b7c82b8c8b4569",
         "ticketId": "SC-2026-0031",
+        "createdBy": "user_001",
         "title": "Garbage overflow near Park",
         "category": "Waste & Sanitation",
         "priority": "High",
@@ -253,6 +314,14 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 self._set_headers(404)
                 self.wfile.write(json.dumps({"message": "File not found"}).encode())
         elif url == '/api/complaints':
+            self._set_headers(200)
+            self.wfile.write(json.dumps(COMPLAINTS_DB).encode())
+        elif url == '/api/admin/complaints':
+            user = get_user_from_headers(self.headers)
+            if not user or user.get('role') not in ['admin', 'dept_officer', 'department']:
+                self._set_headers(403)
+                self.wfile.write(json.dumps({"message": "Forbidden: Access restricted to Department Officers & Admin"}).encode())
+                return
             self._set_headers(200)
             self.wfile.write(json.dumps(COMPLAINTS_DB).encode())
         elif url == '/api/complaints/user':
@@ -390,6 +459,7 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 "address": payload.get('address', 'Indiranagar, Bengaluru'),
                 "avatar": payload.get('avatar', ''),
                 "badge": "VERIFIED CITIZEN",
+                "department": "",
                 "zone": "Bengaluru Municipal Zone C",
                 "memberSince": "September 2026"
             }
@@ -424,8 +494,8 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
                 'Waste & Sanitation': {'department': 'BBMP Sanitation', 'officer': 'Anand Kumar', 'role': 'Sanitation Inspector Zone 3'},
                 'Water & Sewage': {'department': 'BWSSB', 'officer': 'Venkatesh R', 'role': 'BWSSB Hydro Engineer'},
                 'Traffic & Safety': {'department': 'Traffic Police', 'officer': 'Inspector Ramesh', 'role': 'Traffic Division Sub-Inspector'},
-                'Parks & Vegetation': {'department': 'BBMP Parks & Horticulture', 'officer': 'Sunil Rao', 'role': 'Horticulture Supervisor'},
-                'Public Safety': {'department': 'City Patrol Command', 'officer': 'Duty Officer Vikram', 'role': 'Command Control Inspector'}
+                'Parks & Vegetation': {'department': 'BBMP Sanitation', 'officer': 'Anand Kumar', 'role': 'Sanitation Inspector Zone 3'},
+                'Public Safety': {'department': 'Traffic Police', 'officer': 'Inspector Ramesh', 'role': 'Traffic Division Sub-Inspector'}
             }
             comp_cat = payload.get('category', 'Roads & Potholes')
             dept_info = dept_map.get(comp_cat, {'department': 'PWD', 'officer': 'Rajesh Kumar', 'role': 'PWD Engineer'})
@@ -583,6 +653,13 @@ class SmartCivicRequestHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"message": "PUT operation successful"}).encode())
 
 def run_server():
+    # Safe migration for canonical departments
+    for c in COMPLAINTS_DB:
+        if c.get('department') == 'BBMP Parks & Horticulture':
+            c['department'] = 'BBMP Sanitation'
+        elif c.get('department') == 'City Patrol Command':
+            c['department'] = 'Traffic Police'
+    socketserver.TCPServer.allow_reuse_address = True
     server = socketserver.TCPServer(("", PORT), SmartCivicRequestHandler)
     print("==================================================")
     print(f"[SmartCivic] REST API Server running on port {PORT}")
